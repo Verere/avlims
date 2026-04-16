@@ -1,0 +1,50 @@
+import mongoose, { Document, Model, Schema } from 'mongoose';
+
+export interface IOrder extends Document {
+  name: string;
+  patientId: string;
+  age?: number;
+  name?: string;
+  phone?: string;
+  address?: string;
+  orderNum?: string;
+  number?: number;
+  email?: string;
+  slug?: string;
+  isCancelled?: boolean;
+  labId?: mongoose.Types.ObjectId;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const OrderSchema: Schema<IOrder> = new mongoose.Schema({
+
+    patientId:{type: String},
+    name:{type: String},
+    phone:{type: String},
+    address:{type: String},
+    orderNum:{type: String},
+       tests:{type: Array},
+       amount: {type: Number}, 
+       amountPaid: {type: Number, default:0}, 
+       bal: {type: Number},  
+       clinic:{type: String},
+       clinicId:{type: String},       
+       referral:{type: String},        
+       referralId:{type: String},
+       clinicId:{type: String},
+        billTo:{type: String},
+       user:{type: String,   required: true},
+       status:{type: String},
+       slug:{type: String},
+       bDate: {
+           type: String,
+        } ,
+        isCancelled:{type:Boolean, default:false},
+}, {
+    timestamps: true
+});
+
+const Order: Model<IOrder> = mongoose.models.order || mongoose.model<IPatient>('order', OrderSchema);
+export default Order;
+
