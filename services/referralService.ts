@@ -3,7 +3,15 @@ import mongoose from 'mongoose';
 import TestOrderItem from '../models/TestOrderItem';
 import ReferralLedger from '../models/ReferralLedger';
 import TestReferralProfile from '../models/TestReferralProfile';
+import Referrer from '@/models/Referrer';
 import { dbConnect } from '../lib/mongodb';
+
+export async function getReferrers(branchId?: string) {
+  await dbConnect();
+  const filter: any = { isCancelled: false };
+  if (branchId) filter.branchId = branchId;
+  return Referrer.find(filter).sort({ createdAt: -1 }).lean();
+}
 
 export async function accrueReferralBonus({
   testOrderItemId,

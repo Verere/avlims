@@ -1,3 +1,7 @@
+export async function getLabBySlug(slug: string) {
+  await dbConnect();
+  return Lab.findOne({ slug });
+}
 import { dbConnect } from '../lib/mongodb';
 import Lab, { ILab } from '../models/Lab';
 

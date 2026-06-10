@@ -1,16 +1,8 @@
-import React, { useState } from 'react';
+"use client";
+import React, { useState, useEffect } from 'react';
+import { usePathname } from "next/navigation";
 import { LabTest } from '../types/test';
 import { CartItem } from '../types/cart';
-
-const mockTests: LabTest[] = [
-  { id: 'T001', name: 'CBC', category: 'Hematology', price: 5000 },
-  { id: 'T002', name: 'Blood Sugar', category: 'Biochemistry', price: 3000 },
-  { id: 'T003', name: 'Lipid Profile', category: 'Biochemistry', price: 7000 },
-  { id: 'T004', name: 'Malaria', category: 'Parasitology', price: 2000 },
-  { id: 'T005', name: 'Urinalysis', category: 'Urine', price: 2500 },
-];
-
-const categories = Array.from(new Set(mockTests.map(t => t.category)));
 
 type Props = {
   cart: CartItem[];
@@ -19,6 +11,52 @@ type Props = {
 
 export default function TestSelector({ cart, onAdd }: Props) {
   const [query, setQuery] = useState('');
+  const [tests, setTests] = useState<LabTest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const pathname = usePathname();
+  useEffect(() => {
+    async function fetchTests() {
+      setLoading(true);
+      try {
+        // Extract branch from pathname
+        const pathParts = (pathname || "").split("/").filter(Boolean);
+        const branch = pathParts[1] || "";
+        if (!branch) {
+          setTests([]);
+          setLoading(false);
+          return;
+        }
+        // Fetch branchId by slug
+        const branchRes = await fetch(`/api/branches/${branch}`);
+        if (!branchRes.ok) {
+          setTests([]);
+          setLoading(false);
+          return;
+        }
+        const branchDoc = await branchRes.json();
+        if (!branchDoc || !branchDoc._id) {
+          setTests([]);
+          setLoading(false);
+          return;
+        }
+        // Fetch tests by branchId
+        const res = await fetch(`/api/tests?branchId=${branchDoc._id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setTests(data);
+        } else {
+          setTests([]);
+        }
+      } catch {
+        setTests([]);
+      }
+      setLoading(false);
+    }
+    fetchTests();
+  }, [pathname]);
+
+  const categories = Array.from(new Set(tests.map(t => t.category)));
   return (
     <div className="mb-4">
       <label className="block font-semibold mb-1">Lab Tests</label>
@@ -29,27 +67,33 @@ export default function TestSelector({ cart, onAdd }: Props) {
         onChange={e => setQuery(e.target.value)}
       />
       <div className="max-h-40 overflow-y-auto">
-        {categories.map(cat => (
-          <div key={cat}>
-            <div className="font-semibold text-xs text-gray-600 mt-2 mb-1">{cat}</div>
-            {mockTests.filter(t =>
-              t.category === cat &&
-              t.name.toLowerCase().includes(query.toLowerCase())
-            ).map(test => {
-              const inCart = cart.some(item => item.test.id === test.id);
-              return (
-                <div
-                  key={test.id}
-                  className={`flex justify-between items-center p-2 rounded cursor-pointer hover:bg-blue-100 ${inCart ? 'bg-blue-50' : ''}`}
-                  onClick={() => onAdd(test)}
-                >
-                  <span>{test.name}</span>
-                  <span className="text-xs text-gray-500">₦{test.price.toLocaleString()}</span>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+        {loading ? (
+          <div className="p-2 text-gray-500">Loading...</div>
+        ) : categories.length === 0 ? (
+          <div className="p-2 text-gray-500">No tests found.</div>
+        ) : (
+          categories.map(cat => (
+            <div key={cat}>
+              <div className="font-semibold text-xs text-gray-600 mt-2 mb-1">{cat}</div>
+              {tests.filter(t =>
+                t.category === cat &&
+                t.name.toLowerCase().includes(query.toLowerCase())
+              ).map(test => {
+                const inCart = cart.some(item => item.test.id === test.id);
+                return (
+                  <div
+                    key={test.id}
+                    className={`flex justify-between items-center p-2 rounded cursor-pointer hover:bg-blue-100 ${inCart ? 'bg-blue-50' : ''}`}
+                    onClick={() => onAdd(test)}
+                  >
+                    <span>{test.name}</span>
+                    <span className="text-xs text-gray-500">₦{test.price.toLocaleString()}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

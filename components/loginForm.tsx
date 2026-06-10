@@ -1,6 +1,7 @@
 'use client'
 import { toast } from "react-toastify";
 import React, { useState } from "react";
+import { signIn } from "next-auth/react";
 import Image from "next/image";
 
 
@@ -25,21 +26,26 @@ const LoginForm: React.FC = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+      const result = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
       });
-      if (res.ok) {
+      if (result?.ok) {
         if (typeof window !== "undefined") {
           window.location.href = "/dashboard";
         }
       } else {
-        const data = await res.json();
-        toast.error(data.message || "Login failed");
+        let errorMsg = result?.error || "Login failed";
+        // NextAuth sometimes returns generic error messages
+        if (errorMsg.startsWith("CredentialsSignin")) {
+          errorMsg = "Invalid email or password";
+        }
+        toast.error(errorMsg);
       }
     } catch (err) {
-      toast.error("Network error. Please try again.");
+      toast.error(err instanceof Error ? err.message : "An unexpected error occurred");
+      console.log(err instanceof Error ? err.message : err);
     } finally {
       setLoading(false);
     }
@@ -61,18 +67,18 @@ const LoginForm: React.FC = () => {
     <circle cx="32" cy="28" r="3" fill="#00C9FF"/>
     <circle cx="24" cy="52" r="2.5" fill="#0052D4"/>
     <circle cx="40" cy="52" r="2.5" fill="#00C9FF"/>
-    <line x1="32" y1="28" x2="24" y2="52" stroke="#00C9FF" stroke-width="1.5"/>
-    <line x1="32" y1="28" x2="40" y2="52" stroke="#0052D4" stroke-width="1.5"/>
+    <line x1="32" y1="28" x2="24" y2="52" stroke="#00C9FF" strokeWidth="1.5"/>
+    <line x1="32" y1="28" x2="40" y2="52" stroke="#0052D4" strokeWidth="1.5"/>
   </g>
-  <text x="70" y="54" font-family="Inter, Poppins, Arial, sans-serif" font-size="44" font-weight="600" fill="#1A237E" letter-spacing="1">
+  <text x="70" y="54" fontFamily="Inter, Poppins, Arial, sans-serif" fontSize="44" fontWeight="600" fill="#1A237E" letterSpacing="1">
     av
     <tspan fill="#00C9FF">lims</tspan>
   </text>
-  <path d="M92 38 Q94 54 98 38" stroke="#00C9FF" stroke-width="2" fill="none"/>
+  <path d="M92 38 Q94 54 98 38" stroke="#00C9FF" strokeWidth="2" fill="none"/>
   <defs>
     <linearGradient id="grad1" x1="8" y1="16" x2="56" y2="64" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1A237E"/>
-      <stop offset="1" stop-color="#00C9FF"/>
+      <stop stopColor="#1A237E"/>
+      <stop offset="1" stopColor="#00C9FF"/>
     </linearGradient>
   </defs>
 </svg>
@@ -127,7 +133,7 @@ const LoginForm: React.FC = () => {
           />
           Remember me
         </label>
-        <a href="#" className="text-blue-600 text-sm hover:underline focus:underline focus:outline-none transition">Forgot password?</a>
+        <a href="/forgot-password" className="text-blue-600 text-sm hover:underline focus:underline focus:outline-none transition">Forgot password?</a>
       </div>
       <button
         type="submit"
@@ -165,7 +171,7 @@ const LoginForm: React.FC = () => {
       </div> */}
       <p className="text-center text-sm text-gray-500 mt-4">
         Don&apos;t have an account?{' '}
-        <a href="#" className="text-blue-600 hover:underline focus:underline focus:outline-none transition">Sign up</a>
+        <a href="/signup" className="text-blue-600 hover:underline focus:underline focus:outline-none transition">Sign up</a>
       </p>
     </form>
   );

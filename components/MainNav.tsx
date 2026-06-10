@@ -1,7 +1,12 @@
+"use client";
+
 import React from "react";
 import Link from "next/link";
+import { HiMoon, HiSun } from "react-icons/hi2";
+import { useTheme } from "./ThemeProvider";
 
 const MainNav: React.FC = () => {
+  const { isDarkMode, toggleTheme } = useTheme();
   return (
     <nav className="w-full flex items-center justify-between px-4 py-3 bg-white shadow-sm fixed top-0 left-0 z-50">
       {/* Logo */}
@@ -24,11 +29,22 @@ const MainNav: React.FC = () => {
         <span className="font-bold text-xl text-blue-900 tracking-wide select-none hidden sm:inline">av<span className="text-blue-400">lims</span></span>
       </Link>
       {/* Login Button */}
-      <Link href="/login">
-        <button className="bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-blue-700 transition text-sm shadow-sm">
-          Login
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+          title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+          className="rounded-full border border-gray-200 p-2 text-blue-700 transition hover:bg-blue-50"
+        >
+          {isDarkMode ? <HiSun className="h-5 w-5 text-amber-400" /> : <HiMoon className="h-5 w-5" />}
         </button>
-      </Link>
+        <Link href="/login">
+          <button className="bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-blue-700 transition text-sm shadow-sm">
+            Login
+          </button>
+        </Link>
+      </div>
     </nav>
   );
 };

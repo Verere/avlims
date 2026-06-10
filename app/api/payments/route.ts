@@ -1,16 +1,54 @@
+export async function GET() {
+  await dbConnect();
+  try {
+    const payments = await Payment.find().sort({ createdAt: -1 });
+    console.log('Fetched',  payments);
+    return NextResponse.json(payments, { status: 200 });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
+}
 import { NextRequest, NextResponse } from 'next/server';
-import { processPayment } from '../../../services/paymentService';
+
+import Payment from '../../../models/Payment';
+import { dbConnect } from '../../../lib/mongodb';
 
 export async function POST(req: NextRequest) {
+  await dbConnect();
   try {
     const body = await req.json();
-    const { labId, paymentReference, amount, paidBy, paidAt, userId } = body;
-    if (!labId || !paymentReference || !amount || !paidBy || !paidAt) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    console.log('Received payment data:', body);
+    // Validate required fields
+    const required = [
+      'labId', 'name', 'amount',  'userId', 'branchId', 'user',
+      'payments', 'branch', 'patient', 'slug',  'orderId', 'bDate'
+    ];
+    for (const field of required) {
+      if (!body[field]) {
+        return NextResponse.json({ error: `Missing required field: ${field}` }, { status: 400 });
+      }
     }
-    const result = await processPayment({ labId, paymentReference, amount, paidBy, paidAt: new Date(paidAt), userId });
-    return NextResponse.json(result, { status: 200 });
+    // Create payment document
+    const payment = await Payment.create({
+      lab: body.labId,
+      name: body.name,
+      amount: body.amount,
+      createdBy: body.userId,
+      payments: body.payments,
+      branch: body.branch,
+      branchId: body.branchId,
+      patient: body.patient,
+      slug: body.slug,
+      orderId: body.orderId,
+      businessDate: body.bDate,
+      userId: body.userId,
+      user: body.user,
+      status: 'completed',
+      transactionId: body.transactionId,
+    });
+    return NextResponse.json(payment, { status: 201 });
   } catch (error) {
+    console.log('Error creating payment:', error);
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 }

@@ -6,26 +6,28 @@ export interface IPatient extends Document {
   age?: number;
   address?: string;
   gender?: string;
-  number?: number;
+  number?: string;
   email?: string;
   slug?: string;
   isCancelled?: boolean;
   labId?: mongoose.Types.ObjectId;
+  branch?: mongoose.Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 const PatientSchema: Schema<IPatient> = new mongoose.Schema({
   name: { type: String, required: true },
-  regNumber: { type: String, required: true },
+  regNumber: { type: String },
   age: { type: Number },
   address: { type: String },
   gender: { type: String },
-  number: { type: Number },
+  number: { type: String },
   email: { type: String },
   slug: { type: String },
   isCancelled: { type: Boolean, default: false },
   labId: { type: mongoose.Types.ObjectId, ref: 'lab' },
+  branch: { type: mongoose.Types.ObjectId, ref: 'Branch' },
 }, {
   timestamps: true,
 });

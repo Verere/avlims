@@ -1,36 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { testOrderCreationSchema } from '../../../lib/zodSchemas';
 import { dbConnect } from '../../../lib/mongodb';
-import mongoose from 'mongoose';
-
-// Dummy TestOrderItem model for demonstration
-const TestOrderItem = mongoose.connection.collection('testorderitems');
+import Order from '../../../models/Order';
 
 export async function POST(req: NextRequest) {
   await dbConnect();
   try {
     const body = await req.json();
-    // Validate input
-    const parsed = testOrderCreationSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
-    }
-    // Insert test order item(s)
-    const { lab, patient, testType, orderedBy, price, referredBy } = parsed.data;
-    const doc = {
-      lab: new mongoose.Types.ObjectId(lab),
-      patient: new mongoose.Types.ObjectId(patient),
-      testType,
-      orderedBy: new mongoose.Types.ObjectId(orderedBy),
-      price,
-      referredBy: referredBy ? new mongoose.Types.ObjectId(referredBy) : undefined,
-      status: 'REGISTERED',
-      createdAt: new Date(),
+    // Directly create an Order document with all fields from the payload
+    const payload = {
+      ...body,
+      bonus: Number(body?.bonus ?? 0),
     };
-    const result = await TestOrderItem.insertOne(doc);
-    return NextResponse.json({ id: result.insertedId, ...doc }, { status: 201 });
+    const order = await Order.create(payload);
+    return NextResponse.json(order, { status: 201 });
+  } catch (error) {
+    console.error('Error creating test order:', error);
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
+}
+
+export async function GET(req: NextRequest) {
+  await dbConnect();
+  try {
+    const url = new URL(req.url);
+    const branch = url.searchParams.get('branch');
+    const branchId = url.searchParams.get('branchId');
+    let query: any = {};
+    if (branchId) {
+      query.branchId = branchId;
+    } else if (branch) {
+      query.branch = branch;
+    }
+    const orders = await Order.find(query).sort({ createdAt: -1 });
+    return NextResponse.json(orders, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }
+

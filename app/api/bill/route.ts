@@ -1,0 +1,62 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { dbConnect } from '../../../lib/mongodb';
+import Bill from '../../../models/Bill';
+
+export async function GET(req: NextRequest) {
+  await dbConnect();
+  try {
+    const branchId = req.nextUrl.searchParams.get('branchId');
+    const date = req.nextUrl.searchParams.get('date');
+
+    if (!branchId) {
+      return NextResponse.json({ error: 'Missing required query: branchId' }, { status: 400 });
+    }
+
+    const filter: any = { branchId };
+
+    if (date) {
+      const start = new Date(`${date}T00:00:00.000Z`);
+      const end = new Date(`${date}T23:59:59.999Z`);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, { status: 400 });
+      }
+      filter.businessDate = { $gte: start, $lte: end };
+    }
+
+    const bills = await Bill.find(filter).sort({ businessDate: -1, createdAt: -1 }).lean();
+    return NextResponse.json(bills);
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  await dbConnect();
+  try {
+    const body = await req.json();
+    // Validate required fields
+    const required = [
+      'labId',
+      'branchId',
+      'patient',
+      'referrer',
+      'amount',
+      'paid',
+      'balance',
+      'orderId',
+      'businessDate',
+      'billTo',
+      'billToName',
+      'billToRef'
+    ];
+    for (const field of required) {
+      if (body[field] === undefined || body[field] === null) {
+        return NextResponse.json({ error: `Missing required field: ${field}` }, { status: 400 });
+      }
+    }
+    const bill = await Bill.create(body);
+    return NextResponse.json(bill, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+  }
+}

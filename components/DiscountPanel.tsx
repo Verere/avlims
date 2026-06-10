@@ -11,9 +11,11 @@ type Props = {
   onModeChange: (m: DiscountMode) => void;
   onValueChange: (v: number) => void;
   error: string | null;
+  authorisedBy: string;
+  onAuthorisedByChange: (v: string) => void;
 };
 
-export default function DiscountPanel({ enabled, mode, value, subtotal, onToggle, onModeChange, onValueChange, error }: Props) {
+export default function DiscountPanel({ enabled, mode, value, subtotal, onToggle, onModeChange, onValueChange, error, authorisedBy, onAuthorisedByChange }: Props) {
   const calcDiscount = () => {
     if (!enabled) return 0;
     if (mode === 'percent') return Math.round((value / 100) * subtotal);
@@ -44,6 +46,15 @@ export default function DiscountPanel({ enabled, mode, value, subtotal, onToggle
             onChange={e => onValueChange(Number(e.target.value))}
           />
           <span className="text-xs text-gray-500">{mode === 'percent' ? '%' : '₦'}</span>
+          <input
+            type="text"
+            className="border rounded px-2 py-1 w-40 text-sm ml-2"
+            placeholder="Authorised by"
+            value={authorisedBy}
+            onChange={e => onAuthorisedByChange(e.target.value)}
+            required
+          />
+          <span className="text-red-600 ml-1">*</span>
         </div>
       )}
       {enabled && (
