@@ -1,7 +1,8 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { toast } from "react-toastify";
 import PatientSelector from "@/components/PatientSelector";
+import PatientForm from "@/components/PatientForm/PatientForm";
 import TestSelector from "@/components/TestSelector";
 import PanelSelector from "@/components/PanelSelector";
 import ReferrerSelector from "@/components/ReferrerSelector";
@@ -33,6 +34,8 @@ export default function LaboratoryRegistrationPage() {
 	// Patient state
 	const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 	const [showAddPatient, setShowAddPatient] = useState(false);
+	const [addingPatient, setAddingPatient] = useState(false);
+	const [patientRefreshKey, setPatientRefreshKey] = useState(0);
 
 	// Cart state
 	const [cart, setCart] = useState<CartItem[]>([]);
@@ -40,6 +43,9 @@ export default function LaboratoryRegistrationPage() {
 
 	// Referrer state
 	const [referrer, setReferrer] = useState<Referrer>({ id: "walkin", name: "Walk-in", organization: "" });
+	const [showAddReferrer, setShowAddReferrer] = useState(false);
+	const [addingReferrer, setAddingReferrer] = useState(false);
+	const [newReferrerForm, setNewReferrerForm] = useState({ name: "", number: "", organization: "" });
 	// Cart referrer/clinic state
 	const [cartReferrer, setCartReferrer] = useState<{ referrer?: Referrer; refClinic?: string }>({});
 
@@ -683,11 +689,180 @@ export default function LaboratoryRegistrationPage() {
 	const handleAddNewPatient = () => {
 		setShowAddPatient(true);
 	};
-	const handleSaveNewPatient = (p: Patient) => {
-		setSelectedPatient(p);
+	const handleAddNewReferrer = () => {
+		setShowAddReferrer(true);
+	};
+
+	// const handleSaveNewReferrer = async (event: React.FormEvent<HTMLFormElement>) => {
+	// 	event.preventDefault();
+	// 	if (!newReferrerForm.name.trim()) {
+	// 		toast.error("Referrer name is required.");
+	// 		return;
+	// 	}
+
+	// 	setAddingReferrer(true);
+	// 	try {
+	// 		const pathname = window.location.pathname;
+	// 		const pathParts = pathname.split("/").filter(Boolean);
+	// 		const labSlug = pathParts[0] || "";
+	// 		const branchSlug = pathParts[1] || "";
+
+	// 		if (!labSlug || !branchSlug) {
+	// 			throw new Error("Invalid URL. Missing lab or branch.");
+	// 		}
+
+	// 		const [branchRes, labRes] = await Promise.all([
+	// 			fetch(`/api/branches/${branchSlug}`),
+	// 			fetch(`/api/labs/${labSlug}`),
+	// 		]);
+
+	// 		if (!branchRes.ok || !labRes.ok) {
+	// 			throw new Error("Unable to resolve lab/branch details.");
+	// 		}
+
+	// 		const [branchDoc, labDoc] = await Promise.all([branchRes.json(), labRes.json()]);
+	// 		if (!branchDoc?._id || !labDoc?._id) {
+	// 			throw new Error("Invalid lab/branch record.");
+	// 		}
+
+	// 		const payload = {
+	// 			name: newReferrerForm.name.trim(),
+	// 			number: newReferrerForm.number.trim(),
+	// 			organization: newReferrerForm.organization.trim(),
+	// 			refClinic: newReferrerForm.organization.trim(),
+	// 			branch: branchDoc._id,
+	// 			branchId: branchDoc._id,
+	// 			labId: labDoc._id,
+	// 			slug: labSlug,
+	// 		};
+
+	// 		const createRes = await fetch("/api/referrers", {
+	// 			method: "POST",
+	// 			headers: { "Content-Type": "application/json" },
+	// 			body: JSON.stringify(payload),
+	// 		});
+	// 		const data = await createRes.json();
+
+	// 		if (!createRes.ok) {
+	// 			throw new Error(data?.error || "Failed to create referrer");
+	// 		}
+
+	// 		const createdReferrer: Referrer = {
+	// 			id: String(data?.id || data?._id || ""),
+	// 			name: String(data?.name || payload.name),
+	// 			organization: String(data?.organization || payload.organization || ""),
+	// 			refClinic: String(data?.refClinic || data?.organization || payload.organization || ""),
+	// 		};
+
+	// 		setReferrer(createdReferrer);
+	// 		setCartReferrer({
+	// 			referrer: createdReferrer,
+	// 			refClinic: createdReferrer.refClinic || createdReferrer.organization || "",
+	// 		});
+	// 		setShowAddReferrer(false);
+	// 		setNewReferrerForm({ name: "", number: "", organization: "" });
+	// 		toast.success("Referrer added successfully.");
+	// 	} catch (error: any) {
+	// 		toast.error(error?.message || "Failed to add referrer.");
+	// 	} finally {
+	// 		setAddingReferrer(false);
+	// 	}
+	// };
+
+	// const handleCancelAddReferrer = () => {
+	// 	if (addingReferrer) return;
+	// 	setShowAddReferrer(false);
+	// };
+	const handleSaveNewPatient = async (form: any) => {
+		setAddingPatient(true);
+		try {
+			const pathname = window.location.pathname;
+			const pathParts = pathname.split("/").filter(Boolean);
+			const labSlug = pathParts[0] || "";
+			const branchSlug = pathParts[1] || "";
+
+			if (!labSlug || !branchSlug) {
+				throw new Error("Invalid URL. Missing lab or branch.");
+			}
+
+			const [branchRes, labRes] = await Promise.all([
+				fetch(`/api/branches/${branchSlug}`),
+				fetch(`/api/labs/${labSlug}`),
+			]);
+
+			if (!branchRes.ok || !labRes.ok) {
+				throw new Error("Unable to resolve lab/branch details.");
+			}
+
+			const [branchDoc, labDoc] = await Promise.all([branchRes.json(), labRes.json()]);
+			if (!branchDoc?._id || !labDoc?._id) {
+				throw new Error("Invalid lab/branch record.");
+			}
+
+			const payload = {
+				...form,
+				age: form.age ? Number(form.age) : undefined,
+				branch: branchDoc._id,
+				labId: labDoc._id,
+				slug: labSlug,
+			};
+
+			const createRes = await fetch("/api/patients", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+
+			const data = await createRes.json();
+			if (!createRes.ok) {
+				throw new Error(data?.error || "Failed to create patient");
+			}
+
+			setSelectedPatient({
+				id: data.id,
+				name: data.name,
+				age: data.age ? Number(data.age) : undefined,
+				number: data.number || "",
+			});
+			setPatientRefreshKey((prev) => prev + 1);
+			setShowAddPatient(false);
+			toast.success("Patient added successfully.");
+		} catch (error: any) {
+			toast.error(error?.message || "Failed to add patient.");
+		} finally {
+			setAddingPatient(false);
+		}
+	};
+	const handleCancelAddPatient = () => {
+		if (addingPatient) return;
 		setShowAddPatient(false);
 	};
-	const handleCancelAddPatient = () => setShowAddPatient(false);
+
+	useEffect(() => {
+		if (!showAddPatient) return;
+
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				handleCancelAddPatient();
+			}
+		};
+
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [showAddPatient, addingPatient]);
+
+	// useEffect(() => {
+	// 	if (!showAddReferrer) return;
+
+	// 	const onKeyDown = (event: KeyboardEvent) => {
+	// 		if (event.key === "Escape") {
+	// 			handleCancelAddReferrer();
+	// 		}
+	// 	};
+
+	// 	window.addEventListener("keydown", onKeyDown);
+	// 	return () => window.removeEventListener("keydown", onKeyDown);
+	// }, [showAddReferrer, addingReferrer]);
 
 	return (
 		<div className="min-h-screen bg-gray-50 flex flex-col">
@@ -701,6 +876,7 @@ export default function LaboratoryRegistrationPage() {
 							selected={selectedPatient}
 							onSelect={setSelectedPatient}
 							onAddNew={handleAddNewPatient}
+							refreshKey={patientRefreshKey}
 						/>
 					
 					</div>
@@ -741,6 +917,13 @@ export default function LaboratoryRegistrationPage() {
 								});
 							}}
 						/>
+						{/* <button
+							type="button"
+							onClick={handleAddNewReferrer}
+							className="mt-2 w-full rounded bg-green-600 py-2 text-white hover:bg-green-700"
+						>
+							+ Add New Referrer
+						</button> */}
 					</div>
 				</div>
 				{/* Right Panel */}
@@ -814,6 +997,84 @@ export default function LaboratoryRegistrationPage() {
 					</div>
 				</div>
 			</div>
+
+			{showAddPatient && (
+				<div
+					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+					onClick={handleCancelAddPatient}
+				>
+					<div className="relative w-full max-w-lg" onClick={(event) => event.stopPropagation()}>
+						<button
+							type="button"
+							onClick={handleCancelAddPatient}
+							className="absolute right-4 top-4 z-10 rounded bg-gray-100 px-2 py-1 text-sm text-gray-700 hover:bg-gray-200"
+						>
+							Close
+						</button>
+						<PatientForm onSubmit={handleSaveNewPatient} loading={addingPatient} />
+					</div>
+				</div>
+			)}
+
+			{showAddReferrer && (
+				<div
+					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+					onClick={handleCancelAddReferrer}
+				>
+					<div className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-lg" onClick={(event) => event.stopPropagation()}>
+						<button
+							type="button"
+							onClick={handleCancelAddReferrer}
+							className="absolute right-3 top-3 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+							aria-label="Close add referrer form"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+								<path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" strokeLinejoin="round" />
+							</svg>
+						</button>
+
+						<h2 className="mb-4 text-center text-xl font-bold text-blue-700">Add New Referrer</h2>
+						<form className="space-y-3" onSubmit={handleSaveNewReferrer}>
+							<div>
+								<label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
+								<input
+									type="text"
+									value={newReferrerForm.name}
+									onChange={(event) => setNewReferrerForm((prev) => ({ ...prev, name: event.target.value }))}
+									className="w-full rounded border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+									required
+								/>
+							</div>
+							<div>
+								<label className="mb-1 block text-sm font-medium text-gray-700">Phone Number</label>
+								<input
+									type="text"
+									value={newReferrerForm.number}
+									onChange={(event) => setNewReferrerForm((prev) => ({ ...prev, number: event.target.value }))}
+									className="w-full rounded border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+								/>
+							</div>
+							<div>
+								<label className="mb-1 block text-sm font-medium text-gray-700">Organization / Clinic</label>
+								<input
+									type="text"
+									value={newReferrerForm.organization}
+									onChange={(event) => setNewReferrerForm((prev) => ({ ...prev, organization: event.target.value }))}
+									className="w-full rounded border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+								/>
+							</div>
+
+							<button
+								type="submit"
+								disabled={addingReferrer}
+								className="w-full rounded bg-blue-600 py-2 font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+							>
+								{addingReferrer ? "Adding..." : "Add Referrer"}
+							</button>
+						</form>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

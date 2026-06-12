@@ -116,7 +116,7 @@ export default function Cart({ cart, onRemove, subtotal, discount, total, bonus 
               <span>Total</span>
               <span className="text-blue-700">₦{total.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between font-bold text-base mt-2">
+            <div className="flex justify-between font-bold text-base mt-2 hidden">
               <span>Revenue</span>
               <span className="text-green-700">₦{revenue.toLocaleString()}</span>
             </div>

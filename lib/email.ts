@@ -1,3 +1,5 @@
+import nodemailer from "nodemailer";
+
 export async function sendMail({ to, subject, html }: { to: string; subject: string; html: string }) {
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -16,7 +18,6 @@ export async function sendMail({ to, subject, html }: { to: string; subject: str
     html,
   });
 }
-import nodemailer from "nodemailer";
 
 export async function sendVerificationEmail({ to, token }: { to: string; token: string }) {
   const transporter = nodemailer.createTransport({

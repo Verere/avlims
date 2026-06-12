@@ -7,10 +7,11 @@ type Props = {
   selected: Patient | null;
   onSelect: (p: Patient) => void;
   onAddNew: () => void;
+  refreshKey?: number;
 };
 
 
-export default function PatientSelector({ selected, onSelect, onAddNew }: Props) {
+export default function PatientSelector({ selected, onSelect, onAddNew, refreshKey = 0 }: Props) {
   const [query, setQuery] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +56,7 @@ export default function PatientSelector({ selected, onSelect, onAddNew }: Props)
       setLoading(false);
     }
     fetchPatients();
-  }, [pathname]);
+  }, [pathname, refreshKey]);
 
   const filtered = patients.filter(p =>
     p.name.toLowerCase().includes(query.toLowerCase()) ||
