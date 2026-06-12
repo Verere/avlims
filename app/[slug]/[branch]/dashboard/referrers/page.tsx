@@ -5,7 +5,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { usePathname } from "next/navigation";
 
 
-async function fetchReferrersByBranchId(branchId) {
+async function fetchReferrersByBranchId(branchId: string) {
   try {
     const res = await fetch(`/api/referrers?branchId=${branchId}`);
     if (!res.ok) return [];
@@ -15,7 +15,7 @@ async function fetchReferrersByBranchId(branchId) {
   }
 }
 
-async function softDeleteReferrer(id) {
+async function softDeleteReferrer(id: string) {
   try {
     const res = await fetch("/api/referrers", {
       method: "PATCH",
@@ -28,7 +28,7 @@ async function softDeleteReferrer(id) {
   }
 }
 
-async function fetchBranchBySlug(branch) {
+async function fetchBranchBySlug(branch: string) {
   try {
     const res = await fetch(`/api/branches/${branch}`);
     if (!res.ok) return null;
@@ -57,7 +57,7 @@ export default function ReferrersTablePage() {
         if (!branchDoc || !branchDoc._id) throw new Error("Branch not found");
         const data = await fetchReferrersByBranchId(branchDoc._id);
         setReferrers(data);
-      } catch (e) {
+      } catch (e: any) {
         setError(e?.message || "Failed to fetch referrers");
         setReferrers([]);
       }
@@ -66,7 +66,7 @@ export default function ReferrersTablePage() {
     if (branch) fetchData();
   }, [branch]);
 
-  const handleDelete = async (ref) => {
+  const handleDelete = async (ref: any) => {
     toast.warn(
       <div>
         Delete <b>{ref.name}</b>?<br />
@@ -77,7 +77,7 @@ export default function ReferrersTablePage() {
             const res = await softDeleteReferrer(ref._id);
             if (res.success) {
               toast.success("Referrer deleted");
-              setReferrers((prev) => prev.filter((r) => r._id !== ref._id));
+              setReferrers((prev) => prev.filter((r: any) => r._id !== ref._id));
             } else {
               toast.error(res.error || "Failed to delete");
             }
@@ -115,7 +115,7 @@ export default function ReferrersTablePage() {
             ) : referrers.length === 0 ? (
               <tr><td colSpan={7} className="px-6 py-4 text-center text-gray-500">No referrers found.</td></tr>
             ) : (
-              referrers.map((ref) => (
+              referrers.map((ref: any) => (
                 <tr key={ref._id} className="border-b hover:bg-blue-100/60 transition-all">
                   <td className="px-3 py-2 sm:px-6 sm:py-4 text-gray-900 font-semibold group-hover:text-blue-700 whitespace-nowrap">{ref.name?.toUpperCase()}</td>
                   <td className="px-3 py-2 sm:px-6 sm:py-4 text-gray-800 whitespace-nowrap">{ref.phone}</td>

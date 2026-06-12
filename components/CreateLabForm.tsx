@@ -1,14 +1,22 @@
 "use client";
 
 import { useActionState } from "react";
-import { createLabAction } from "@/app/dashboard/create-lab/actions";
+import { createLabAction, LabState } from "@/app/dashboard/create-lab/actions";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 
+const initialState: LabState = {
+  success: false,
+  error: "",
+};
+
 export default function CreateLabForm() {
   const router = useRouter();
-  const [state, formAction] = useActionState(createLabAction, { success: false, error: null });
+ const [state, formAction] = useActionState(
+  createLabAction,
+  initialState
+);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 

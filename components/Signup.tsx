@@ -4,8 +4,17 @@ import { useActionState } from "react";
 
 import { useRef, useState } from "react";
 
+type AuthState = {
+  success: boolean;
+  error: string;
+};
+
 export default function Signup() {
-  const [state, formAction] = useActionState(signupAction, { success: false, error: null });
+
+  const [state, formAction] = useActionState(signupAction, {
+  success: false,
+  error: "",
+});
   const [loading, setLoading] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 

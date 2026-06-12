@@ -26,7 +26,7 @@ async function fetchCategoriesByBranchId(branchId: string) {
 
 export default function AddSubCategoryPage() {
   const pathname = usePathname();
-  const pathParts = pathname.split("/").filter(Boolean);
+  const pathParts = (pathname || "").split("/").filter(Boolean);
   const slug = pathParts[0] || "";
   const branch = pathParts[1] || "";
 

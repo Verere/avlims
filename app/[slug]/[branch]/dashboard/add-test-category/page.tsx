@@ -10,7 +10,7 @@ export default function AddTestCategoryPage({ params }: { params: { slug: string
   const [success, setSuccess] = useState(false);
   const pathname = usePathname();
   // Example pathname: /lab-slug/branch-id/dashboard/add-test-category
-  const pathParts = pathname.split("/").filter(Boolean);
+  const pathParts = (pathname || "").split("/").filter(Boolean);
   const lab = pathParts[0] || "";
   const branch = pathParts[1] || "";
   console.log("Destructured lab:", lab, "branch:", branch);
@@ -45,7 +45,7 @@ export default function AddTestCategoryPage({ params }: { params: { slug: string
         });
         if (!res.ok) throw new Error("Failed to add test category");
         setSuccess(true);
-        setForm({ name: "" });
+        setForm({name: "", slug: lab})
       } catch (e: any) {
         setError(e?.message || "Failed to add test category");
       }

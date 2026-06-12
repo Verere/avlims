@@ -5,8 +5,13 @@ import { forgotPasswordAction } from "./actions";
 import { useRef, useState } from "react";
 
 export default function ForgotPasswordPage() {
-  const [state, formAction] = useActionState(forgotPasswordAction, { success: false, error: null });
-  const [loading, setLoading] = useState(false);
+  const [state, formAction] = useActionState(
+  forgotPasswordAction,
+  {
+    success: false,
+    error: "",
+  }
+); const [loading, setLoading] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   return (

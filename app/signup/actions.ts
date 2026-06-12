@@ -10,9 +10,12 @@ const signupSchema = z.object({
   password: z.string().min(6),
 });
 
+export type AuthState = {
+  success: boolean;
+  error: string;
+};
 
-
-export const signupAction = async (prevState: any, formData: any) => {
+export const signupAction = async (prevState: AuthState, formData: any): Promise<AuthState> => {
   try {
     // Log the raw formData object
     console.log('Raw formData:', formData);
@@ -36,13 +39,13 @@ export const signupAction = async (prevState: any, formData: any) => {
       // Validate input
     const parsed = signupSchema.safeParse({ name, email, password });
     if (!parsed.success) {
-      return { error: parsed.error.issues[0].message };
+      return { success: false, error: parsed.error.issues[0].message };
     }
 
     await dbConnect();
     const existing = await User.findOne({ email: parsed.data.email });
     if (existing) {
-      return { error: "Email already registered" };
+      return { success: false, error: "Email already registered" };
     }
     const hashed = await hashPassword(parsed.data.password);
     await User.create({
@@ -52,9 +55,8 @@ export const signupAction = async (prevState: any, formData: any) => {
       status: "active",
       emailVerified: false,
     });
-    return { success: true };
+    return { success: true , error: ""};
   } catch (err) {
-    console.log(err);
-    return { error: 'Failed to create user' };
+    return { success: false, error: 'Failed to create user' };
   }
 };

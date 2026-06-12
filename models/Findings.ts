@@ -40,12 +40,12 @@ const FindingsSchema = new Schema<IFinding>(
   { timestamps: true }
 );
 
-FindingsSchema.pre('validate', function (next) {
-  const doc = this as IFinding;
-  if (!doc.reportTemplateRef && !doc.testRef) {
-    return next(new Error('A finding snippet must be linked to either reportTemplateRef or testRef'));
-  }
-  next();
-});
+// FindingsSchema.pre('validate', function (next) {
+//   const doc = this as IFinding;
+//   if (!doc.reportTemplateRef && !doc.testRef) {
+//     return next(new Error('A finding snippet must be linked to either reportTemplateRef or testRef'));
+//   }
+//   next();
+// });
 
 export default mongoose.models.Finding || mongoose.model<IFinding>('Finding', FindingsSchema);

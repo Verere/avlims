@@ -5,7 +5,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
-async function fetchBranchBySlug(branch) {
+async function fetchBranchBySlug(branch: any) {
   try {
     const res = await fetch(`/api/branches/${branch}`);
     if (!res.ok) return null;
@@ -16,7 +16,7 @@ async function fetchBranchBySlug(branch) {
 }
 
 
-async function fetchPatientsByBranchId(branchId) {
+async function fetchPatientsByBranchId(branchId: string) {
   try {
     const res = await fetch(`/api/patients?branchId=${branchId}`);
     if (!res.ok) return [];
@@ -26,7 +26,7 @@ async function fetchPatientsByBranchId(branchId) {
   }
 }
 
-async function softDeletePatient(id) {
+async function softDeletePatient(id: string) {
   try {
     const res = await fetch("/api/patients", {
       method: "PATCH",
@@ -68,7 +68,7 @@ export default function PatientsPage() {
     if (branch) fetchData();
   }, [branch]);
 
-  const handleDelete = async (patient) => {
+  const handleDelete = async (patient: any) => {
     toast.warn(
       <div>
         Delete <b>{patient.name}</b>?<br />
@@ -80,7 +80,7 @@ export default function PatientsPage() {
             if (res.success) {
               toast.success("Patient deleted");
               // Refresh patients list
-              setPatients((prev) => prev.filter((p) => (p._id || p.id) !== (patient._id || patient.id)));
+              setPatients((prev) => prev.filter((p: any) => (p._id || p.id) !== (patient._id || patient.id)));
             } else {
               toast.error(res.error || "Failed to delete");
             }
@@ -126,7 +126,7 @@ export default function PatientsPage() {
                 <td colSpan={5} className="text-center py-8 text-gray-400">No patients found.</td>
               </tr>
             ) : (
-              patients.map((patient, idx) => (
+              patients.map((patient: any, idx: number) => (
                 <tr
                   key={patient._id || patient.id}
                   className={

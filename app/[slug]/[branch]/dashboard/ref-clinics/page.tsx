@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
-async function fetchRefClinicsByBranchId(branchId) {
+async function fetchRefClinicsByBranchId(branchId: string) {
   try {
     const res = await fetch(`/api/ref-clinics?branchId=${branchId}`);
     if (!res.ok) return [];
@@ -12,7 +12,7 @@ async function fetchRefClinicsByBranchId(branchId) {
   }
 }
 
-async function fetchBranchBySlug(branch) {
+async function fetchBranchBySlug(branch: string) {
   try {
     const res = await fetch(`/api/branches/${branch}`);
     if (!res.ok) return null;
@@ -41,7 +41,7 @@ export default function RefClinicsTablePage() {
         if (!branchDoc || !branchDoc._id) throw new Error("Branch not found");
         const clinics = await fetchRefClinicsByBranchId(branchDoc._id);
         setRefClinics(clinics);
-      } catch (e) {
+      } catch (e: any) {
         setError(e?.message || "Failed to fetch ref clinics");
         setRefClinics([]);
       }
@@ -70,7 +70,7 @@ export default function RefClinicsTablePage() {
             ) : refClinics.length === 0 ? (
               <tr><td colSpan={3} className="px-6 py-4 text-center text-gray-500">No ref clinics found.</td></tr>
             ) : (
-              refClinics.map((clinic) => (
+              refClinics.map((clinic: any) => (
                 <tr key={clinic._id} className="border-b hover:bg-blue-100/60 transition-all">
                   <td className="px-6 py-4 text-gray-900 font-semibold group-hover:text-blue-700">{clinic.name?.toUpperCase()}</td>
                   <td className="px-6 py-4 text-gray-800">{clinic.address}</td>

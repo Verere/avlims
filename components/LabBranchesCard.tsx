@@ -2,7 +2,20 @@
 import RemoveBranchesButton from "@/components/RemoveBranchesButton";
 import { useState } from "react";
 
-export default function LabBranchesCard({ lab }) {
+type Lab = {
+  branches: string[];
+  name: string;
+  status: string;
+  _id: string;
+};
+
+type LabBranchesCardProps = {
+  lab: Lab;
+};
+
+export default function LabBranchesCard({
+  lab,
+}: LabBranchesCardProps) {
   const [branchesCount, setBranchesCount] = useState(lab.branches.length);
   const handleRemoved = () => setBranchesCount(0);
 

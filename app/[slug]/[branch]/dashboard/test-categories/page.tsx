@@ -28,7 +28,7 @@ async function getTestCategoriesByBranchId(branchId: string) {
 export default function TestCategoriesPage() {
   const pathname = usePathname();
   // Example: /lab-slug/branch-id/dashboard/test-categories
-  const pathParts = pathname.split("/").filter(Boolean);
+  const pathParts = (pathname || "").split("/").filter(Boolean);
   const slug = pathParts[0] || "";
   const branch = pathParts[1] || "";
   const [categories, setCategories] = useState<any[]>([]);

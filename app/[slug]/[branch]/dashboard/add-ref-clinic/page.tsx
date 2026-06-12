@@ -2,7 +2,7 @@
 import React, { useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 
-async function fetchBranchBySlug(branch) {
+async function fetchBranchBySlug(branch: any) {
   try {
     const res = await fetch(`/api/branches/${branch}`);
     if (!res.ok) return null;
@@ -12,7 +12,7 @@ async function fetchBranchBySlug(branch) {
   }
 }
 
-async function createRefClinic(data) {
+async function createRefClinic(data: any) {
   const res = await fetch("/api/ref-clinics", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -37,12 +37,12 @@ export default function AddRefClinicPage() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  const handleChange = (e) => {
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
     setError(null);
     setSuccess(false);
@@ -57,7 +57,7 @@ export default function AddRefClinicPage() {
         });
         setSuccess(true);
         setForm({ name: "", address: "", slug: slug });
-      } catch (e) {
+      } catch (e:any) {
         setError(e?.message || "Failed to add ref-clinic");
       }
     });

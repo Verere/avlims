@@ -5,11 +5,19 @@ import Lab from "@/models/Lab";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
-export async function createLabAction(prevState: any, formData: FormData) {
+export type LabState = {
+  success: boolean;
+  error: string;
+};
+
+export async function createLabAction(
+  prevState: LabState,
+  formData: FormData
+): Promise<LabState> {
   const session = await getServerSession(authOptions);
   const user = session?.user;
   if (!user) {
-    return { error: "You must be signed in to create a lab." };
+    return { success: false, error: "You must be signed in to create a lab." };
   }
   function slugify(str: string) {
     return str
@@ -22,12 +30,12 @@ export async function createLabAction(prevState: any, formData: FormData) {
   try {
     const name = String(formData.get("name") ?? "").trim();
     if (!name) {
-      return { error: "Lab name is required." };
+      return { success: false, error: "Lab name is required." };
     }
     await dbConnect();
     const existing = await Lab.findOne({ name });
     if (existing) {
-      return { error: "A lab with this name already exists." };
+      return { success: false, error: "A lab with this name already exists." };
     }
 
 
@@ -47,15 +55,15 @@ export async function createLabAction(prevState: any, formData: FormData) {
     // Guard: Prevent creation if slug is still null/empty
     if (!slug) {
       console.error("Lab creation aborted: slug is null or empty", { name, slug });
-      return { error: "Failed to generate a unique lab slug. Please try again." };
+      return { success: false, error: "Failed to generate a unique lab slug. Please try again." };
     }
     console.log("Creating lab with slug:", slug);
 
     // Pass user.id as string, let Mongoose cast to ObjectId
     await Lab.create({ name, slug, owner: user.id });
-    return { success: true };
+    return { success: true ,  error: ""};
   } catch (err) {
     console.error(err);
-    return { error: "Failed to create lab." };
+    return { success: false, error: "Failed to create lab." };
   }
 }

@@ -15,7 +15,7 @@ import { getPatients } from "@/services/patientService";
 export async function GET(req: NextRequest) {
   try {
     const branchId = req.nextUrl.searchParams.get('branchId');
-    const patients = await getPatients(branchId);
+    const patients = await getPatients(branchId || undefined);
     
     // Map _id to id for frontend compatibility
     const mapped = patients.map((p: any) => ({

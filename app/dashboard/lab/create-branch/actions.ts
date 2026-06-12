@@ -4,6 +4,11 @@ import Branch from "@/models/Branch";
 import Lab from "@/models/Lab";
 import LabMembership from "@/models/LabMembership";
 
+export type BranchState = {
+  success: boolean;
+  error: string;
+};
+
 export async function createBranchAction(prevState: any, formData: FormData) {
   const mongoose = require('mongoose');
   let session;
@@ -13,7 +18,10 @@ export async function createBranchAction(prevState: any, formData: FormData) {
     const address = String(formData.get("address") ?? "").trim();
     const phone = String(formData.get("phone") ?? "").trim();
     if (!labId || !branch || !address || !phone) {
-      return { error: "All fields are required." };
+      return {
+  success: false,
+  error: "All fields are required.",
+};
     }
     await dbConnect();
     session = await mongoose.startSession();
@@ -24,13 +32,12 @@ export async function createBranchAction(prevState: any, formData: FormData) {
     try {
       lab = await Lab.findById(labId).session(session);
     } catch (e) {
-      console.error('Error finding lab:', e);
       throw e;
     }
     if (!lab) {
       await session.abortTransaction();
       session.endSession();
-      return { error: "Lab not found." };
+      return { success: false, error: "Lab not found." };
     }
     const labSlug = lab.slug;
 

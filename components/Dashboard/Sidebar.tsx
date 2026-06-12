@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 
-function buildNavItems(slug, branch) {
+function buildNavItems(slug: string, branch: string) {
   return [
     { label: "Overview", icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7m-9 2v8m4-8v8m5 0h-6a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2z" /></svg>, href: `/${slug}/${branch}/dashboard` },
     { label: "Test Orders", icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0h6" /></svg>, href: `/${slug}/${branch}/dashboard/test-orders` },
@@ -70,13 +70,22 @@ function buildNavItems(slug, branch) {
   ];
 }
 
+type SidebarProps = {
+  collapsed: boolean;
+  onToggle: () => void;
+  slug: string;
+  branch: string;
+  lab?: any;        // refine later if you want
+  branchDoc?: any;  // refine later if you want
+  labLogoUrl?: string; // refine later if you want
+};
 
-export default function Sidebar({ collapsed, onToggle, slug, branch, lab, branchDoc }) {
+export default function Sidebar({ collapsed, onToggle, slug, branch, lab, branchDoc, labLogoUrl }: SidebarProps) {
   const navItems = buildNavItems(slug, branch);
-  const [openSubNav, setOpenSubNav] = useState(null);
+  const [openSubNav, setOpenSubNav] = useState<string | null>(null);
   const activeHref = navItems[0]?.href;
 
-  const handleSubNavToggle = (href) => {
+  const handleSubNavToggle = (href: string) => {
     setOpenSubNav(prev => (prev === href ? null : href));
   };
 

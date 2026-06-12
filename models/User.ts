@@ -48,7 +48,7 @@ const UserSchema = new Schema<IUser>({
   avatar: { type: String },
 }, { timestamps: true });
 
-UserSchema.pre('validate', function (next) {
+UserSchema.pre('validate', function (this: IUser) {
   const user = this as any;
   if (!user.username || typeof user.username !== 'string' || !user.username.trim()) {
     const emailPrefix = String(user.email || 'user')
@@ -58,7 +58,6 @@ UserSchema.pre('validate', function (next) {
     const suffix = Math.random().toString(36).slice(2, 8);
     user.username = `${emailPrefix}_${suffix}`;
   }
-  next();
 });
 
 const existingModel = mongoose.models.User as mongoose.Model<IUser> | undefined;
@@ -69,7 +68,7 @@ if (existingModel) {
   }
 
   if (!(existingModel.schema as any)._usernamePreValidatePatched) {
-    existingModel.schema.pre('validate', function (next) {
+    existingModel.schema.pre('validate', function (this: IUser) {
       const user = this as any;
       if (!user.username || typeof user.username !== 'string' || !user.username.trim()) {
         const emailPrefix = String(user.email || 'user')
@@ -79,7 +78,6 @@ if (existingModel) {
         const suffix = Math.random().toString(36).slice(2, 8);
         user.username = `${emailPrefix}_${suffix}`;
       }
-      next();
     });
     (existingModel.schema as any)._usernamePreValidatePatched = true;
   }

@@ -21,7 +21,7 @@ const [open, setOpen] = useState(false);
   const { isDarkMode, toggleTheme } = useTheme();
   const pathname = usePathname();
   // Extract slug and branch from /[slug]/[branch]/...
-  const pathParts = pathname.split("/").filter(Boolean);
+  const pathParts = (pathname || "").split("/").filter(Boolean);
   const slug = pathParts[0] || "";
   const branch = pathParts[1] || "";
 

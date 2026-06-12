@@ -4,7 +4,7 @@ import PatientForm from "@/components/PatientForm/PatientForm";
 import addPatient from "./actions";
 import { usePathname } from "next/navigation";
 
-async function fetchBranchBySlug(branch) {
+async function fetchBranchBySlug(branch:any) {
   try {
     const res = await fetch(`/api/branches/${branch}`);
     if (!res.ok) return null;
@@ -14,7 +14,7 @@ async function fetchBranchBySlug(branch) {
   }
 }
 
-async function fetchLabBySlug(lab) {
+async function fetchLabBySlug(lab:any) {
   try {
     const res = await fetch(`/api/labs/${lab}`);
     if (!res.ok) return null;

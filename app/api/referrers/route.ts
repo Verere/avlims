@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   await dbConnect();
   try {
     const branchId = req.nextUrl.searchParams.get('branchId');
-     const refs = await getReferrers(branchId);
+     const refs = await getReferrers(branchId || undefined);
  
     // Attach refClinicName for UI
     const result = refs.map(r => ({

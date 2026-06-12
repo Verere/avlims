@@ -49,7 +49,7 @@ export default async function Dashboard() {
               ...lab.toObject(),
               _id: lab._id.toString(),
               owner: lab.owner?.toString?.() ?? lab.owner,
-              branches: Array.isArray(lab.branches) ? lab.branches.map(b => b?.toString?.() ?? b) : [],
+              branches: Array.isArray(lab.branches) ? lab.branches.map((b: any) => b?.toString?.() ?? b) : [],
               createdAt: lab.createdAt?.toISOString?.() ?? lab.createdAt,
               updatedAt: lab.updatedAt?.toISOString?.() ?? lab.updatedAt,
             };

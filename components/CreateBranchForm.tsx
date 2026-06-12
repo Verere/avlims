@@ -1,17 +1,21 @@
 "use client"
 import { useActionState } from "react";
-import { createBranchAction } from "@/app/dashboard/lab/create-branch/actions";
+import { BranchState, createBranchAction } from "@/app/dashboard/lab/create-branch/actions";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+
+const initialState: BranchState = {
+  success: false,
+  error: "",
+};
+
 export default function CreateBranchForm({ labId }: { labId: string }) {
+ 
   const [state, formAction] = useActionState(
-    async (prevState: any, formData: FormData | undefined) => {
-      if (!formData) return { error: "No form data received." };
-      return await createBranchAction(prevState, formData);
-    },
-    { success: false, error: null }
-  );
+  createBranchAction,
+  initialState
+);
   const [branch, setBranch] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");

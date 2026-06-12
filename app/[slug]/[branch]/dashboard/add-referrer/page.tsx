@@ -2,7 +2,7 @@
 import React, { useState, useTransition, useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-async function fetchBranchBySlug(branch) {
+async function fetchBranchBySlug(branch: any) {
   try {
     const res = await fetch(`/api/branches/${branch}`);
     if (!res.ok) return null;
@@ -12,7 +12,7 @@ async function fetchBranchBySlug(branch) {
   }
 }
 
-async function fetchRefClinicsByBranchId(branchId) {
+async function fetchRefClinicsByBranchId(branchId: any) {
   try {
     const res = await fetch(`/api/ref-clinics?branchId=${branchId}`);
     if (!res.ok) return [];
@@ -56,12 +56,12 @@ export default function AddReferrerPage() {
     if (branch) fetchData();
   }, [branch]);
 
-  const handleChange = (e) => {
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
     setError(null);
     setSuccess(false);
@@ -80,7 +80,7 @@ export default function AddReferrerPage() {
         if (!res.ok) throw new Error("Failed to add referrer");
         setSuccess(true);
         setForm({ name: "", address: "", phone: "", refClinic: "", bank: "", account: "", email: "", slug: slug });
-      } catch (e) {
+      } catch (e: any) {
         setError(e?.message || "Failed to add referrer");
       }
     });
@@ -133,8 +133,8 @@ export default function AddReferrerPage() {
             required
           >
             <option value="">Select a ref clinic</option>
-            {refClinics.map((clinic) => (
-              <option key={clinic._id} value={clinic._id}>{clinic.name}</option>
+            {refClinics?.map((clinic: any) => (
+              <option key={clinic?._id} value={clinic._id}>{clinic.name}</option>
             ))}
           </select>
         </div>

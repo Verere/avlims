@@ -1,14 +1,36 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useActionState } from "react";
 import { resetPasswordAction } from "./actions";
 
+type ResetPasswordState = {
+  success: boolean;
+  error: string;
+};
+
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen flex items-center justify-center bg-gray-50">Loading...</main>}>
+      <ResetPasswordPageContent />
+    </Suspense>
+  );
+}
+
+function ResetPasswordPageContent() {
   const searchParams = useSearchParams();
-  const token = searchParams.get("token") || "";
-  const [state, formAction] = useActionState(resetPasswordAction, { success: false, error: null });
-  const [password, setPassword] = useState("");
+  const token = searchParams?.get("token") || "";
+
+  const [state, formAction] = useActionState<
+  ResetPasswordState,
+  FormData
+>(
+  resetPasswordAction,
+  {
+    success: false,
+    error: "",
+  }
+); const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +56,7 @@ export default function ResetPasswordPage() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-gray-50">
       <form
-        action={handleFormAction}
+        action={formAction}
         className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md flex flex-col gap-4"
       >
         <h1 className="text-2xl font-bold text-center">Reset Password</h1>
