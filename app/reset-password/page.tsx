@@ -54,12 +54,12 @@ function ResetPasswordPageContent() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50">
+    <main className="min-h-screen flex items-center justify-center bg-gray-50 text-black">
       <form
         action={formAction}
         className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md flex flex-col gap-4"
       >
-        <h1 className="text-2xl font-bold text-center">Reset Password</h1>
+        <h1 className="text-2xl font-bold text-center text-black">Reset Password</h1>
         {!token && <div className="text-red-500 text-sm text-center">Invalid or missing token.</div>}
         {state.error && <div className="text-red-500 text-sm text-center">{state.error}</div>}
         {state.success && <div className="text-green-600 text-sm text-center">Password reset! You can now <a href='/login' className='text-blue-600 hover:underline'>log in</a>.</div>}
