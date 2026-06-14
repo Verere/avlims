@@ -693,86 +693,86 @@ export default function LaboratoryRegistrationPage() {
 		setShowAddReferrer(true);
 	};
 
-	// const handleSaveNewReferrer = async (event: React.FormEvent<HTMLFormElement>) => {
-	// 	event.preventDefault();
-	// 	if (!newReferrerForm.name.trim()) {
-	// 		toast.error("Referrer name is required.");
-	// 		return;
-	// 	}
+	const handleSaveNewReferrer = async (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (!newReferrerForm.name.trim()) {
+			toast.error("Referrer name is required.");
+			return;
+		}
 
-	// 	setAddingReferrer(true);
-	// 	try {
-	// 		const pathname = window.location.pathname;
-	// 		const pathParts = pathname.split("/").filter(Boolean);
-	// 		const labSlug = pathParts[0] || "";
-	// 		const branchSlug = pathParts[1] || "";
+		setAddingReferrer(true);
+		try {
+			const pathname = window.location.pathname;
+			const pathParts = pathname.split("/").filter(Boolean);
+			const labSlug = pathParts[0] || "";
+			const branchSlug = pathParts[1] || "";
 
-	// 		if (!labSlug || !branchSlug) {
-	// 			throw new Error("Invalid URL. Missing lab or branch.");
-	// 		}
+			if (!labSlug || !branchSlug) {
+				throw new Error("Invalid URL. Missing lab or branch.");
+			}
 
-	// 		const [branchRes, labRes] = await Promise.all([
-	// 			fetch(`/api/branches/${branchSlug}`),
-	// 			fetch(`/api/labs/${labSlug}`),
-	// 		]);
+			const [branchRes, labRes] = await Promise.all([
+				fetch(`/api/branches/${branchSlug}`),
+				fetch(`/api/labs/${labSlug}`),
+			]);
 
-	// 		if (!branchRes.ok || !labRes.ok) {
-	// 			throw new Error("Unable to resolve lab/branch details.");
-	// 		}
+			if (!branchRes.ok || !labRes.ok) {
+				throw new Error("Unable to resolve lab/branch details.");
+			}
 
-	// 		const [branchDoc, labDoc] = await Promise.all([branchRes.json(), labRes.json()]);
-	// 		if (!branchDoc?._id || !labDoc?._id) {
-	// 			throw new Error("Invalid lab/branch record.");
-	// 		}
+			const [branchDoc, labDoc] = await Promise.all([branchRes.json(), labRes.json()]);
+			if (!branchDoc?._id || !labDoc?._id) {
+				throw new Error("Invalid lab/branch record.");
+			}
 
-	// 		const payload = {
-	// 			name: newReferrerForm.name.trim(),
-	// 			number: newReferrerForm.number.trim(),
-	// 			organization: newReferrerForm.organization.trim(),
-	// 			refClinic: newReferrerForm.organization.trim(),
-	// 			branch: branchDoc._id,
-	// 			branchId: branchDoc._id,
-	// 			labId: labDoc._id,
-	// 			slug: labSlug,
-	// 		};
+			const payload = {
+				name: newReferrerForm.name.trim(),
+				number: newReferrerForm.number.trim(),
+				organization: newReferrerForm.organization.trim(),
+				refClinic: newReferrerForm.organization.trim(),
+				branch: branchDoc._id,
+				branchId: branchDoc._id,
+				labId: labDoc._id,
+				slug: labSlug,
+			};
 
-	// 		const createRes = await fetch("/api/referrers", {
-	// 			method: "POST",
-	// 			headers: { "Content-Type": "application/json" },
-	// 			body: JSON.stringify(payload),
-	// 		});
-	// 		const data = await createRes.json();
+			const createRes = await fetch("/api/referrers", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			const data = await createRes.json();
 
-	// 		if (!createRes.ok) {
-	// 			throw new Error(data?.error || "Failed to create referrer");
-	// 		}
+			if (!createRes.ok) {
+				throw new Error(data?.error || "Failed to create referrer");
+			}
 
-	// 		const createdReferrer: Referrer = {
-	// 			id: String(data?.id || data?._id || ""),
-	// 			name: String(data?.name || payload.name),
-	// 			organization: String(data?.organization || payload.organization || ""),
-	// 			refClinic: String(data?.refClinic || data?.organization || payload.organization || ""),
-	// 		};
+			const createdReferrer: Referrer = {
+				id: String(data?.id || data?._id || ""),
+				name: String(data?.name || payload.name),
+				organization: String(data?.organization || payload.organization || ""),
+				refClinic: String(data?.refClinic || data?.organization || payload.organization || ""),
+			};
 
-	// 		setReferrer(createdReferrer);
-	// 		setCartReferrer({
-	// 			referrer: createdReferrer,
-	// 			refClinic: createdReferrer.refClinic || createdReferrer.organization || "",
-	// 		});
-	// 		setShowAddReferrer(false);
-	// 		setNewReferrerForm({ name: "", number: "", organization: "" });
-	// 		toast.success("Referrer added successfully.");
-	// 	} catch (error: any) {
-	// 		toast.error(error?.message || "Failed to add referrer.");
-	// 	} finally {
-	// 		setAddingReferrer(false);
-	// 	}
-	// };
+			setReferrer(createdReferrer);
+			setCartReferrer({
+				referrer: createdReferrer,
+				refClinic: createdReferrer.refClinic || createdReferrer.organization || "",
+			});
+			setShowAddReferrer(false);
+			setNewReferrerForm({ name: "", number: "", organization: "" });
+			toast.success("Referrer added successfully.");
+		} catch (error: any) {
+			toast.error(error?.message || "Failed to add referrer.");
+		} finally {
+			setAddingReferrer(false);
+		}
+	};
 
-	// const handleCancelAddReferrer = () => {
-	// 	if (addingReferrer) return;
-	// 	setShowAddReferrer(false);
-	// };
+	const handleCancelAddReferrer = () => {
+		if (addingReferrer) return;
+		setShowAddReferrer(false);
+	};
 	const handleSaveNewPatient = async (form: any) => {
 		setAddingPatient(true);
 		try {
@@ -851,18 +851,18 @@ export default function LaboratoryRegistrationPage() {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [showAddPatient, addingPatient]);
 
-	// useEffect(() => {
-	// 	if (!showAddReferrer) return;
+	useEffect(() => {
+		if (!showAddReferrer) return;
 
-	// 	const onKeyDown = (event: KeyboardEvent) => {
-	// 		if (event.key === "Escape") {
-	// 			handleCancelAddReferrer();
-	// 		}
-	// 	};
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				handleCancelAddReferrer();
+			}
+		};
 
-	// 	window.addEventListener("keydown", onKeyDown);
-	// 	return () => window.removeEventListener("keydown", onKeyDown);
-	// }, [showAddReferrer, addingReferrer]);
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [showAddReferrer, addingReferrer]);
 
 	return (
 		<div className="min-h-screen bg-gray-50 flex flex-col">
@@ -1016,7 +1016,7 @@ export default function LaboratoryRegistrationPage() {
 				</div>
 			)}
 
-			{showAddReferrer && (
+			{/* {showAddReferrer && (
 				<div
 					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
 					onClick={handleCancelAddReferrer}
@@ -1074,7 +1074,7 @@ export default function LaboratoryRegistrationPage() {
 						</form>
 					</div>
 				</div>
-			)}
+			)} */}
 		</div>
 	);
 }
