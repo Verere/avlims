@@ -30,7 +30,8 @@ export async function sendVerificationEmail({ to, token }: { to: string; token: 
     },
   });
 
-  const verifyUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/verify-email?token=${token}`;
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const verifyUrl = `${baseUrl.replace(/\/$/, "")}/verify-email?token=${token}`;
 
   await transporter.sendMail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
