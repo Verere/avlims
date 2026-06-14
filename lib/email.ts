@@ -1,5 +1,18 @@
 import nodemailer from "nodemailer";
 
+export function getAppBaseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    process.env.NEXTAUTH_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
+  ).replace(/\/$/, "");
+}
+
+export function buildAppUrl(path: string) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${getAppBaseUrl()}${normalizedPath}`;
+}
+
 export async function sendMail({ to, subject, html }: { to: string; subject: string; html: string }) {
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -30,11 +43,10 @@ export async function sendVerificationEmail({ to, token }: { to: string; token: 
     },
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
-  const verifyUrl = `${baseUrl.replace(/\/$/, "")}/verify-email?token=${token}`;
+  const verifyUrl = buildAppUrl(`/verify-email?token=${token}`);
 
   await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
     to,
     subject: "Verify your email address",
     html: `<p>Thank you for signing up!</p>

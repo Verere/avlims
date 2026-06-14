@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbConnect } from "@/lib/mongodb";
 import User from "@/models/User";
-import { sendMail } from "@/lib/email";
+import { buildAppUrl, sendMail } from "@/lib/email";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     user.passwordResetExpiry = tokenExpiry;
     await user.save();
     // Send email
-    const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/reset-password?token=${token}`;
+    const resetUrl = buildAppUrl(`/reset-password?token=${token}`);
     await sendMail({
       to: email,
       subject: "Password Reset Request",

@@ -1,7 +1,7 @@
 "use server";
 import { dbConnect } from "@/lib/mongodb";
 import User from "@/models/User";
-import { sendMail } from "@/lib/email";
+import { buildAppUrl, sendMail } from "@/lib/email";
 import crypto from "crypto";
 
 
@@ -43,14 +43,15 @@ export async function forgotPasswordAction(
 
     await user.save();
 
-    const resetUrl =
-      `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}` +
-      `/reset-password?token=${token}`;
+    const resetUrl = buildAppUrl(`/reset-password?token=${token}`);
 
     await sendMail({
       to: email,
       subject: "Password Reset Request",
-      html: `<p>You requested a password reset...</p>`,
+      html: `<p>You requested a password reset.</p>
+      <p>Click the link below to update your password:</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <p>If you did not request this, you can ignore this email.</p>`,
     });
 
     return {
