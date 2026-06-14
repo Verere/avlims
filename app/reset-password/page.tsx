@@ -33,21 +33,23 @@ function ResetPasswordPageContent() {
 ); const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [clientError, setClientError] = useState("");
 
-  const handleFormAction = async (formData: FormData) => {
+  const handleFormAction = async (formData: FormData): Promise<void> => {
     setLoading(true);
     try {
+      setClientError("");
       if (!password || password.length < 6) {
-        setLoading(false);
-        return { error: "Password must be at least 6 characters." };
+        setClientError("Password must be at least 6 characters.");
+        return;
       }
       if (password !== confirm) {
-        setLoading(false);
-        return { error: "Passwords do not match." };
+        setClientError("Passwords do not match.");
+        return;
       }
       formData.set("token", token);
       formData.set("password", password);
-      return await formAction(formData);
+      await formAction(formData);
     } finally {
       setLoading(false);
     }
@@ -56,11 +58,13 @@ function ResetPasswordPageContent() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-gray-50 text-black">
       <form
-        action={formAction}
+        action={handleFormAction}
         className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md flex flex-col gap-4"
       >
         <h1 className="text-2xl font-bold text-center text-black">Reset Password</h1>
+        <input type="hidden" name="token" value={token} />
         {!token && <div className="text-red-500 text-sm text-center">Invalid or missing token.</div>}
+        {clientError && <div className="text-red-500 text-sm text-center">{clientError}</div>}
         {state.error && <div className="text-red-500 text-sm text-center">{state.error}</div>}
         {state.success && <div className="text-green-600 text-sm text-center">Password reset! You can now <a href='/login' className='text-blue-600 hover:underline'>log in</a>.</div>}
         {!state.success && token && <>
