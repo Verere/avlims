@@ -13,6 +13,24 @@ export async function getReferrers(branchId?: string) {
   return Referrer.find(filter).sort({ createdAt: -1 }).lean();
 }
 
+
+
+export async function createReferrer(data: any) {
+  await dbConnect();
+  const branchId = data.branchId || data.branch;
+  if (!branchId || !data.slug) {
+    throw new Error("branchId and slug are required to create a referrer");
+  }
+
+  const payload = {
+    ...data,
+    branchId,
+  };
+
+  const referrer = await Referrer.create(payload);
+  return referrer;
+}
+
 export async function accrueReferralBonus({
   testOrderItemId,
   labId,

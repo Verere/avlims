@@ -1,5 +1,6 @@
 "use client";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useTransition } from "react";
+import { usePathname } from "next/navigation";
 import { toast } from "react-toastify";
 import PatientSelector from "@/components/PatientSelector";
 import PatientForm from "@/components/PatientForm/PatientForm";
@@ -10,21 +11,22 @@ import Cart from "@/components/Cart";
 import DiscountPanel from "@/components/DiscountPanel";
 import PaymentPanel from "@/components/PaymentPanel";
 import { Patient } from "@/types/patient";
+import { Referrer } from "@/types/referrer";
+import { Facility } from "@/types/facility";
 import { LabTest } from "@/types/test";
 import { CartItem } from "@/types/cart";
 import Navbar from "@/components/Navbar";
+import FacilitySelector from "@/components/FacilitySelector";
+import ReferrerForm from "@/components/ReferrerForm/ReferrerForm";
+import RefClinicForm from "@/components/RefClinicForm/RefClinicForm";
 
-type Referrer = {
-  id: string;
-  name: string;
-  organization?: string;
-  refClinic?: string;
-};
+
 
 type DiscountMode = "percent" | "fixed";
 type PaymentMethod = "cash" | "transfer" | "pos";
 
 export default function LaboratoryRegistrationPage() {
+	const pathname = usePathname();
 	// Bill To state
 	const [billTo, setBillTo] = useState("");
 	const [billToRef, setBillToRef] = useState("");
@@ -33,21 +35,36 @@ export default function LaboratoryRegistrationPage() {
 	const [showBillPopup, setShowBillPopup] = useState(false);
 	// Patient state
 	const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+	const [selectedReferrer, setSelectedReferrer] = useState<Referrer | null>(null);
+	const [selectedFacility, setSelectedFacility] = useState<Facility | null>(null);
 	const [showAddPatient, setShowAddPatient] = useState(false);
 	const [addingPatient, setAddingPatient] = useState(false);
-	const [patientRefreshKey, setPatientRefreshKey] = useState(0);
+	const [patientRefreshKey, setPatientRefreshKey	] = useState(0);
+	const [facilityRefreshKey, setFacilityRefreshKey] = useState(0);
+	const [referrerRefreshKey, setReferrerRefreshKey] = useState(0);
 
 	// Cart state
 	const [cart, setCart] = useState<CartItem[]>([]);
+	const [itemBonuses, setItemBonuses] = useState<Record<string, number>>({});
 	const [selectorMode, setSelectorMode] = useState<"test" | "panel">("test");
 
 	// Referrer state
 	const [referrer, setReferrer] = useState<Referrer>({ id: "walkin", name: "Walk-in", organization: "" });
+	const [facility, setFacility] = useState<Facility>({ id: "private", name: "Private", address: "" });
 	const [showAddReferrer, setShowAddReferrer] = useState(false);
 	const [addingReferrer, setAddingReferrer] = useState(false);
-	const [newReferrerForm, setNewReferrerForm] = useState({ name: "", number: "", organization: "" });
+	const [newReferrerForm, setNewReferrerForm] = useState({ name: "", address: "", phone: "", organization: "", bank:"", account:"", email:"" });
+	// Cart referrer/clinic state
+	const [showAddFacility, setShowAddFacility] = useState(false);
+	const [addingFacility, setAddingFacility] = useState(false);
+	const [newFacilityForm, setNewFacilityForm] = useState({ name: "", address: "" });
 	// Cart referrer/clinic state
 	const [cartReferrer, setCartReferrer] = useState<{ referrer?: Referrer; refClinic?: string }>({});
+ const [refClinics, setRefClinics] = useState([]);
+  const [loading, startTransition] = useTransition();
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+
 
 	// Discount state
 	const [discountEnabled, setDiscountEnabled] = useState(false);
@@ -63,7 +80,7 @@ export default function LaboratoryRegistrationPage() {
 	// Loading state for payment
 	const [isPaying, setIsPaying] = useState(false);
 
-
+	
 	// Cart logic
 	const handleAddTest = (test: LabTest) => {
 		setCart(prev => {
@@ -115,8 +132,8 @@ export default function LaboratoryRegistrationPage() {
 	const bonus = useMemo(() => {
 		const effectiveReferrerId = (cartReferrer.referrer?.id || referrer.id || "").toLowerCase();
 		if (effectiveReferrerId === "walkin") return 0;
-		return Math.round(subtotal * 0.1);
-	}, [subtotal, cartReferrer.referrer?.id, referrer.id]);
+		return Object.values(itemBonuses).reduce((sum, value) => sum + Number(value || 0), 0);
+	}, [itemBonuses, cartReferrer.referrer?.id, referrer.id]);
 	const discount = useMemo(() => {
 		if (!discountEnabled) return 0;
 		if (discountMode === "percent") return Math.round((discountValue / 100) * subtotal);
@@ -126,6 +143,84 @@ export default function LaboratoryRegistrationPage() {
 	const revenue = useMemo(() => Math.max(total - bonus, 0), [total, bonus]);
 	const totalPaid = useMemo(() => payments.reduce((sum, p) => sum + p.amount, 0), [payments]);
 	const balance = useMemo(() => total - totalPaid, [total, totalPaid]);
+	const showBonus = useMemo(() => {
+		const effectiveReferrerId = (cartReferrer.referrer?.id || referrer.id || "").toLowerCase();
+		return !!effectiveReferrerId && effectiveReferrerId !== "walkin";
+	}, [cartReferrer.referrer?.id, referrer.id]);
+
+	useEffect(() => {
+		const effectiveReferrerId = (cartReferrer.referrer?.id || referrer.id || "").toLowerCase();
+		const hasReferrerBonus = effectiveReferrerId !== "walkin";
+		const next: Record<string, number> = {};
+
+		const seenPanels = new Set<string>();
+		for (const item of cart) {
+			if (item.panel) {
+				const key = `panel:${item.panel.id}`;
+				if (seenPanels.has(key)) continue;
+				seenPanels.add(key);
+				const base = Math.round(Number(item.panel.price || 0) * 0.1);
+				next[key] = hasReferrerBonus ? (itemBonuses[key] ?? base) : 0;
+				continue;
+			}
+
+			const key = `test:${item.test.id}`;
+			const base = Math.round(Number(item.test.price || 0) * Number(item.quantity || 1) * 0.1);
+			next[key] = hasReferrerBonus ? (itemBonuses[key] ?? base) : 0;
+		}
+
+		setItemBonuses(next);
+	}, [cart, cartReferrer.referrer?.id, referrer.id]);
+
+	const handleItemBonusChange = (itemKey: string, value: number) => {
+		setItemBonuses((prev) => ({
+			...prev,
+			[itemKey]: Number.isFinite(value) && value > 0 ? value : 0,
+		}));
+	};
+
+	const ledgerTests = useMemo(() => {
+		const entries: Array<{
+			testId: string;
+			testName: string;
+			panelId?: string;
+			panelName?: string;
+			quantity: number;
+			amount: number;
+			bonus: number;
+		}> = [];
+
+		const seenPanels = new Set<string>();
+		for (const item of cart) {
+			if (item.panel) {
+				const panelKey = `panel:${item.panel.id}`;
+				if (seenPanels.has(panelKey)) continue;
+				seenPanels.add(panelKey);
+
+				entries.push({
+					testId: String(item.panel.id),
+					testName: String(item.panel.name),
+					panelId: String(item.panel.id),
+					panelName: String(item.panel.name),
+					quantity: 1,
+					amount: Number(item.panel.price || 0),
+					bonus: Number(itemBonuses[panelKey] || 0),
+				});
+				continue;
+			}
+
+			const testKey = `test:${item.test.id}`;
+			entries.push({
+				testId: String(item.test.id),
+				testName: String(item.test.name),
+				quantity: Number(item.quantity || 1),
+				amount: Number(item.test.price || 0) * Number(item.quantity || 1),
+				bonus: Number(itemBonuses[testKey] || 0),
+			});
+		}
+
+		return entries;
+	}, [cart, itemBonuses]);
 
 	const formatMoney = (value: number) => `N${Number(value || 0).toLocaleString()}`;
 
@@ -451,6 +546,7 @@ export default function LaboratoryRegistrationPage() {
 				const referralLedgerPayload = {
 					order: orderData._id || orderData.id,
 					referrer: cartReferrer.referrer?.id,
+					tests: ledgerTests,
 					amount: total,
 					bonus,
 					branchId: branchId,
@@ -469,6 +565,7 @@ export default function LaboratoryRegistrationPage() {
 			toast.success("Payment and order completed!");
 			// Optionally clear state
 			setCart([]);
+			setItemBonuses({});
 			setSelectedPatient(null);
 			setReferrer({ id: "walkin", name: "Walk-in", organization: "" });
 			setCartReferrer({});
@@ -652,6 +749,7 @@ export default function LaboratoryRegistrationPage() {
 				const referralLedgerPayload = {
 					order: orderData._id || orderData.id,
 					referrer: cartReferrer.referrer?.id,
+					tests: ledgerTests,
 					amount: total,
 					bonus,
 					branchId: branchId,
@@ -670,6 +768,7 @@ export default function LaboratoryRegistrationPage() {
 			toast.success("Bill created!");
 			// Optionally clear state
 			setCart([]);
+			setItemBonuses({});
 			setSelectedPatient(null);
 			setReferrer({ id: "walkin", name: "Walk-in", organization: "" });
 			setCartReferrer({});
@@ -689,12 +788,16 @@ export default function LaboratoryRegistrationPage() {
 	const handleAddNewPatient = () => {
 		setShowAddPatient(true);
 	};
+	const handleAddNewFacility = () => {
+		setShowAddFacility(true);
+	};
 	const handleAddNewReferrer = () => {
 		setShowAddReferrer(true);
 	};
 
-	const handleSaveNewReferrer = async (event: React.FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
+	const handleSaveNewReferrer = async (newReferrerForm: any) => {
+		// console.log("referrer form submitted")
+		// console.log('newReferrerForm:', newReferrerForm);
 		if (!newReferrerForm.name.trim()) {
 			toast.error("Referrer name is required.");
 			return;
@@ -724,24 +827,30 @@ export default function LaboratoryRegistrationPage() {
 			if (!branchDoc?._id || !labDoc?._id) {
 				throw new Error("Invalid lab/branch record.");
 			}
+			console.log("printing payload", newReferrerForm)
 
 			const payload = {
 				name: newReferrerForm.name.trim(),
-				number: newReferrerForm.number.trim(),
-				organization: newReferrerForm.organization.trim(),
-				refClinic: newReferrerForm.organization.trim(),
+				phone: newReferrerForm.phone.trim(),
+				address: newReferrerForm.address.trim(),
+				bank: newReferrerForm.bank.trim(),
+				account: newReferrerForm.account.trim(),
+				email: newReferrerForm.email.trim(),
+				refClinic: newReferrerForm.refClinic.trim(),
 				branch: branchDoc._id,
 				branchId: branchDoc._id,
 				labId: labDoc._id,
 				slug: labSlug,
 			};
 
+			console.log("Creating referrer with payload:", payload);
 			const createRes = await fetch("/api/referrers", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(payload),
 			});
 			const data = await createRes.json();
+			console.log("Create referrer response:", { status: createRes.status, data });
 
 			if (!createRes.ok) {
 				throw new Error(data?.error || "Failed to create referrer");
@@ -750,17 +859,18 @@ export default function LaboratoryRegistrationPage() {
 			const createdReferrer: Referrer = {
 				id: String(data?.id || data?._id || ""),
 				name: String(data?.name || payload.name),
-				organization: String(data?.organization || payload.organization || ""),
-				refClinic: String(data?.refClinic || data?.organization || payload.organization || ""),
+				refClinic: String(data?.refClinic || data?.organization || payload.refClinic ||""),
 			};
 
+			setSelectedReferrer(createdReferrer);
 			setReferrer(createdReferrer);
 			setCartReferrer({
 				referrer: createdReferrer,
 				refClinic: createdReferrer.refClinic || createdReferrer.organization || "",
 			});
+			setReferrerRefreshKey((prev) => prev + 1);
 			setShowAddReferrer(false);
-			setNewReferrerForm({ name: "", number: "", organization: "" });
+			setNewReferrerForm({ name: "", phone: "", address: "", organization: "", bank: "", account: "", email: "" });
 			toast.success("Referrer added successfully.");
 		} catch (error: any) {
 			toast.error(error?.message || "Failed to add referrer.");
@@ -772,6 +882,84 @@ export default function LaboratoryRegistrationPage() {
 	const handleCancelAddReferrer = () => {
 		if (addingReferrer) return;
 		setShowAddReferrer(false);
+	};
+
+	const handleSaveNewFacility = async (newFacilityForm: any) => {
+		if (!newFacilityForm.name.trim()) {
+			toast.error("Facility name is required.");
+			return;
+		}
+
+		setAddingFacility(true);
+		try {
+			const pathname = window.location.pathname;
+			const pathParts = pathname.split("/").filter(Boolean);
+			const labSlug = pathParts[0] || "";
+			const branchSlug = pathParts[1] || "";
+
+			if (!labSlug || !branchSlug) {
+				throw new Error("Invalid URL. Missing lab or branch.");
+			}
+
+			const [branchRes, labRes] = await Promise.all([
+				fetch(`/api/branches/${branchSlug}`),
+				fetch(`/api/labs/${labSlug}`),
+			]);
+
+			if (!branchRes.ok || !labRes.ok) {
+				throw new Error("Unable to resolve lab/branch details.");
+			}
+
+			const [branchDoc, labDoc] = await Promise.all([branchRes.json(), labRes.json()]);
+			if (!branchDoc?._id || !labDoc?._id) {
+				throw new Error("Invalid lab/branch record.");
+			}
+
+			const payload = {
+				name: newFacilityForm.name.trim(),
+				address: newFacilityForm.address.trim(),
+				
+				branch: branchDoc._id,
+				branchId: branchDoc._id,
+				labId: labDoc._id,
+				slug: labSlug,
+			};
+
+			const createRes = await fetch("/api/ref-clinics", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			const data = await createRes.json();
+
+			if (!createRes.ok) {
+				throw new Error(data?.error || "Failed to create facility");
+			}
+
+			const createdFacility: Referrer = {
+				id: String(data?.id || data?._id || ""),
+				name: String(data?.name || payload.name),
+				address: String(data?.address || payload.address || ""),
+			};
+
+			setFacility(createdFacility);
+			// setCartReferrer({
+			// 	refClinic: createdFacility.address || createdFacility.name || "",
+			// });
+			setFacilityRefreshKey((prev) => prev + 1);
+			setShowAddFacility(false);
+			setNewFacilityForm({ name: "", address: "" });
+			toast.success("Facility added successfully.");
+		} catch (error: any) {
+			toast.error(error?.message || "Failed to add facility.");
+		} finally {
+			setAddingFacility(false);
+		}
+	};
+
+	const handleCancelAddFacility = () => {
+		if (addingFacility) return;
+		setShowAddFacility(false);
 	};
 	const handleSaveNewPatient = async (form: any) => {
 		setAddingPatient(true);
@@ -864,6 +1052,49 @@ export default function LaboratoryRegistrationPage() {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [showAddReferrer, addingReferrer]);
 
+async function fetchBranchBySlug(branch: any) {
+  try {
+    const res = await fetch(`/api/branches/${branch}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchRefClinicsByBranchId(branchId: any) {
+  try {
+    const res = await fetch(`/api/ref-clinics?branchId=${branchId}`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
+const pathParts = (pathname || "").split("/").filter(Boolean);
+const branch = pathParts[1] || "";
+
+  useEffect(() => {
+	
+
+	async function loadRefClinics() {
+	  try {
+		const branchDoc = await fetchBranchBySlug(branch);
+		if (branchDoc && branchDoc._id) {
+		  const clinics = await fetchRefClinicsByBranchId(branchDoc._id);
+		  setRefClinics(clinics);
+		} else {
+		  setRefClinics([]);
+		}
+	  } catch {
+		setRefClinics([]);
+	  
+	}}
+	loadRefClinics();
+  }, [branch]);
+
+
 	return (
 		<div className="min-h-screen bg-gray-50 flex flex-col">
 	  <Navbar />
@@ -874,13 +1105,50 @@ export default function LaboratoryRegistrationPage() {
 					<div className="bg-white rounded shadow p-4">
 						<PatientSelector
 							selected={selectedPatient}
-							onSelect={setSelectedPatient}
+								onSelect={setSelectedPatient}
 							onAddNew={handleAddNewPatient}
 							refreshKey={patientRefreshKey}
 						/>
 					
 					</div>
+				
 					<div className="bg-white rounded shadow p-4">
+						<FacilitySelector
+							selected={selectedFacility}
+							onSelect={(facility) => {
+								setSelectedFacility(facility);
+								setCartReferrer((prev) => ({
+									...prev,
+									refClinic: facility?.name || "",
+								}));
+							}}
+							onAddNew={handleAddNewFacility}
+							refreshKey={facilityRefreshKey}
+						/>
+						
+						
+						
+					</div>
+					<div className="bg-white rounded shadow p-4">
+						<ReferrerSelector
+							selected={selectedReferrer}
+							onSelect={(selected) => {
+								setCart([]);
+								setItemBonuses({});
+								setSelectedReferrer(selected);
+								setReferrer(selected);
+							
+							setCartReferrer((prev) => ({
+								...prev,
+								referrer: selected,
+							}));
+							}}
+							onAddNew={handleAddNewReferrer}
+							refreshKey={referrerRefreshKey}
+						/> 
+						
+					</div>
+						<div className="bg-white rounded shadow p-4">
 						<div className="mb-3 inline-flex rounded border border-gray-300 overflow-hidden">
 							<button
 								type="button"
@@ -904,27 +1172,6 @@ export default function LaboratoryRegistrationPage() {
 							<PanelSelector cart={cart} onAddPanelTests={handleAddPanelTests} />
 						)}
 					</div>
-					<div className="bg-white rounded shadow p-4">
-						<ReferrerSelector
-							selected={referrer}
-							onSelect={(r) => {
-								setReferrer(r);
-								setCartReferrer({
-									referrer: r,
-									refClinic: (typeof r === "object" && "refClinic" in r && typeof r.refClinic === "string" && r.refClinic)
-										? r.refClinic
-										: (typeof r.organization === "string" ? r.organization : "")
-								});
-							}}
-						/>
-						{/* <button
-							type="button"
-							onClick={handleAddNewReferrer}
-							className="mt-2 w-full rounded bg-green-600 py-2 text-white hover:bg-green-700"
-						>
-							+ Add New Referrer
-						</button> */}
-					</div>
 				</div>
 				{/* Right Panel */}
 				<div className="w-full md:w-1/2 space-y-4">
@@ -933,10 +1180,14 @@ export default function LaboratoryRegistrationPage() {
 													{selectedPatient?.name && (
 														<div className="font-bold text-blue-700 text-base mb-1 text-center">Patient: {selectedPatient.name}</div>
 													)}
+															{cartReferrer.refClinic && (
+																<div className="text-xs text-gray-700 text-center">
+																	<div>Facility: <span className="font-semibold">{cartReferrer.refClinic}</span></div>
+																</div>
+															)}
 													{cartReferrer.referrer && (
 														<div className="text-xs text-gray-700 text-center">
 															<div>Referrer: <span className="font-semibold">{cartReferrer.referrer.name}</span></div>
-															{cartReferrer.refClinic && <div>Ref Clinic: <span className="font-semibold">{cartReferrer.refClinic}</span></div>}
 														</div>
 													)}
 												</div>
@@ -947,6 +1198,9 @@ export default function LaboratoryRegistrationPage() {
 													discount={discount}
 													total={total}
 													bonus={bonus}
+													showBonus={showBonus}
+													itemBonuses={itemBonuses}
+													onItemBonusChange={handleItemBonusChange}
 													revenue={revenue}
 												/>
 						<DiscountPanel
@@ -1016,7 +1270,28 @@ export default function LaboratoryRegistrationPage() {
 				</div>
 			)}
 
-			{/* {showAddReferrer && (
+			{showAddFacility && (
+				<div
+					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+					onClick={handleCancelAddFacility}
+				>
+					<div className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-lg" onClick={(event) => event.stopPropagation()}>
+						<button
+							type="button"
+							onClick={handleCancelAddFacility}
+							className="absolute right-3 top-3 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+							aria-label="Close add referrer form"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+								<path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" strokeLinejoin="round" />
+							</svg>
+						</button>
+
+						<RefClinicForm onSubmit={handleSaveNewFacility} loading={addingFacility} />
+					</div>
+				</div>
+			)} 
+			{showAddReferrer && (
 				<div
 					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
 					onClick={handleCancelAddReferrer}
@@ -1033,48 +1308,10 @@ export default function LaboratoryRegistrationPage() {
 							</svg>
 						</button>
 
-						<h2 className="mb-4 text-center text-xl font-bold text-blue-700">Add New Referrer</h2>
-						<form className="space-y-3" onSubmit={handleSaveNewReferrer}>
-							<div>
-								<label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
-								<input
-									type="text"
-									value={newReferrerForm.name}
-									onChange={(event) => setNewReferrerForm((prev) => ({ ...prev, name: event.target.value }))}
-									className="w-full rounded border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-									required
-								/>
-							</div>
-							<div>
-								<label className="mb-1 block text-sm font-medium text-gray-700">Phone Number</label>
-								<input
-									type="text"
-									value={newReferrerForm.number}
-									onChange={(event) => setNewReferrerForm((prev) => ({ ...prev, number: event.target.value }))}
-									className="w-full rounded border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-								/>
-							</div>
-							<div>
-								<label className="mb-1 block text-sm font-medium text-gray-700">Organization / Clinic</label>
-								<input
-									type="text"
-									value={newReferrerForm.organization}
-									onChange={(event) => setNewReferrerForm((prev) => ({ ...prev, organization: event.target.value }))}
-									className="w-full rounded border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-								/>
-							</div>
-
-							<button
-								type="submit"
-								disabled={addingReferrer}
-								className="w-full rounded bg-blue-600 py-2 font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-							>
-								{addingReferrer ? "Adding..." : "Add Referrer"}
-							</button>
-						</form>
+						<ReferrerForm onSubmit={handleSaveNewReferrer} loading={addingReferrer} refClinics={refClinics}/>
 					</div>
 				</div>
-			)} */}
+			)} 
 		</div>
 	);
 }

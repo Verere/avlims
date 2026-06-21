@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     }
 
     const rows = await ReferralLedger.find(filter)
-      .populate('referrer', 'name')
+      .populate('referrer', 'name phone')
       .populate('testOrder', 'name')
       .sort({ createdAt: -1 })
       .lean();
@@ -54,7 +54,6 @@ export async function POST(req: NextRequest) {
   await dbConnect();
   try {
     const body = await req.json();
-    console.log('Received referral ledger data:', body);
     // Validate required fields
     const required = ['order', 'referrer', 'amount', 'bonus', 'branchId', 'lab', 'user'];
     for (const field of required) {
@@ -64,9 +63,24 @@ export async function POST(req: NextRequest) {
       }
     }
     // Create referral ledger entry
+    const tests = Array.isArray(body.tests)
+      ? body.tests
+          .filter((t: any) => t && t.testId && t.testName)
+          .map((t: any) => ({
+            testId: String(t.testId),
+            testName: String(t.testName),
+            panelId: t.panelId ? String(t.panelId) : undefined,
+            panelName: t.panelName ? String(t.panelName) : undefined,
+            quantity: Number(t.quantity || 1),
+            amount: Number(t.amount || 0),
+            bonus: Number(t.bonus || 0),
+          }))
+      : [];
+
     const ledger = await ReferralLedger.create({
       testOrder: body.order, // maps to testOrder in schema
       referrer: body.referrer,
+      tests,
       amount: body.amount,
       bonus: body.bonus,
       branchId: body.branchId,

@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   try {
     const branchId = req.nextUrl.searchParams.get('branchId');
     const filter = branchId ? { branchId } : {};
-    const refClinics = await RefClinic.find(filter);
+    const refClinics = await RefClinic.find(filter).sort({ createdAt: -1 }).lean();;
     return NextResponse.json(refClinics);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to fetch ref clinics' }, { status: 400 });

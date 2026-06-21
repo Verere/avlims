@@ -9,12 +9,16 @@ type Props = {
   discount: number;
   total: number;
   bonus?: number;
-  onBonusChange?: (v: number) => void;
+  showBonus?: boolean;
+  itemBonuses?: Record<string, number>;
+  onItemBonusChange?: (itemKey: string, value: number) => void;
   revenue?: number;
   patientName?: string;
+  facilityName?: string;
+  referrerName?: string;
 };
 
-export default function Cart({ cart, onRemove, subtotal, discount, total, bonus = 0, onBonusChange, revenue = 0, patientName }: Props) {
+export default function Cart({ cart, onRemove, subtotal, discount, total, bonus = 0, showBonus = false, itemBonuses = {}, onItemBonusChange, revenue = 0, patientName, facilityName, referrerName }: Props) {
   const panelGroups = new Map<string, { name: string; price: number; tests: CartItem[] }>();
   const standaloneItems: CartItem[] = [];
 
@@ -37,10 +41,17 @@ export default function Cart({ cart, onRemove, subtotal, discount, total, bonus 
 
   return (
     <div className="mb-4">
+      <h2 className="font-semibold mb-2 text-lg">Tests Cart</h2>
+
       {patientName && (
         <div className="font-bold text-blue-700 text-base mb-2 text-center">Patient: {patientName}</div>
       )}
-      <h2 className="font-semibold mb-2 text-lg">Cart</h2>
+      {facilityName && (
+        <div className="font-bold text-blue-700 text-base mb-2 text-center">Facility: {facilityName}</div>
+      )}
+      {referrerName && (
+        <div className="font-bold text-blue-700 text-base mb-2 text-center">Referrer: {referrerName}</div>
+      )}
       {cart.length === 0 ? (
         <div className="text-gray-500">No tests selected.</div>
       ) : (
@@ -53,7 +64,22 @@ export default function Cart({ cart, onRemove, subtotal, discount, total, bonus 
                   <div className="text-xs text-gray-500">Panel ({group.tests.length} tests)</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">₦{group.price.toLocaleString()}</span>
+                  <div className="text-right">
+                    <div className="text-sm font-semibold">₦{group.price.toLocaleString()}</div>
+                    {showBonus && (
+                      <div className="mt-1 text-xs text-gray-600">
+                        Bonus:
+                        <input
+                          type="number"
+                          min={0}
+                          step="1"
+                          value={itemBonuses[`panel:${panelId}`] ?? 0}
+                          onChange={(e) => onItemBonusChange?.(`panel:${panelId}`, Number(e.target.value || 0))}
+                          className="ml-1 w-16 rounded border px-1 py-0.5 text-right"
+                        />
+                      </div>
+                    )}
+                  </div>
                   <button
                     className="text-red-500 hover:text-red-700 text-xs"
                     onClick={() => onRemove(`panel:${panelId}`)}
@@ -78,10 +104,25 @@ export default function Cart({ cart, onRemove, subtotal, discount, total, bonus 
             <div key={item.test.id} className="flex justify-between items-center border-b py-2">
               <div>
                 <div className="font-medium">{item.test.name}</div>
-                <div className="text-xs text-gray-500">Qty: {item.quantity}</div>
+                {/* <div className="text-xs text-gray-500">Qty: {item.quantity}</div> */}
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm">₦{(item.test.price * item.quantity).toLocaleString()}</span>
+                <div className="text-right">
+                  <div className="text-sm">₦{(item.test.price * item.quantity).toLocaleString()}</div>
+                  {showBonus && (
+                    <div className="mt-1 text-xs text-gray-600">
+                      Incentive:
+                      <input
+                        type="number"
+                        min={0}
+                        step="1"
+                        value={itemBonuses[`test:${item.test.id}`] ?? 0}
+                        onChange={(e) => onItemBonusChange?.(`test:${item.test.id}`, Number(e.target.value || 0))}
+                        className="ml-1 w-16 rounded border px-1 py-0.5 text-right"
+                      />
+                    </div>
+                  )}
+                </div>
                 <button
                   className="text-red-500 hover:text-red-700 text-xs"
                   onClick={() => onRemove(item.test.id)}
@@ -102,16 +143,18 @@ export default function Cart({ cart, onRemove, subtotal, discount, total, bonus 
                 <span>-₦{discount.toLocaleString()}</span>
               </span>
             </div>
-            <div className="flex justify-between mb-1 items-center">
-              <span>Bonus</span>
-              <input
-                type="number"
-                className="border rounded px-2 py-1 w-24 text-right bg-gray-100"
-                value={bonus}
-                readOnly
-                tabIndex={-1}
-              />
-            </div>
+            {showBonus && (
+              <div className="flex justify-between mb-1 items-center">
+                <span>Total Incentive</span>
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1 w-24 text-right bg-gray-100"
+                  value={bonus}
+                  readOnly
+                  tabIndex={-1}
+                />
+              </div>
+            )}
             <div className="flex justify-between font-bold text-lg">
               <span>Total</span>
               <span className="text-blue-700">₦{total.toLocaleString()}</span>

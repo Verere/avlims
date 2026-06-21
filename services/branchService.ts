@@ -3,5 +3,9 @@ import Branch from "@/models/Branch";
 
 export async function getBranchBySlug(slug: string) {
   await dbConnect();
-  return Branch.findOne({ branch: slug });
+  const pattern = new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+  const branch = await Branch.findOne({
+    $or: [{ branch: pattern }],
+  });
+  return branch;
 }

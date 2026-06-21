@@ -1,17 +1,23 @@
-export async function GET() {
+import { NextRequest, NextResponse } from 'next/server';
+
+import Payment from '../../../models/Payment';
+import { dbConnect } from '../../../lib/mongodb';
+
+export async function GET(req: NextRequest) {
   await dbConnect();
   try {
-    const payments = await Payment.find().sort({ createdAt: -1 });
-    console.log('Fetched',  payments);
+    const branchId = req.nextUrl.searchParams.get("branchId");
+    const query: Record<string, any> = {};
+    if (branchId) {
+      query.branchId = branchId;
+    }
+    const payments = await Payment.find(query).sort({ createdAt: -1 });
+    console.log('Fetched', payments);
     return NextResponse.json(payments, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }
-import { NextRequest, NextResponse } from 'next/server';
-
-import Payment from '../../../models/Payment';
-import { dbConnect } from '../../../lib/mongodb';
 
 export async function POST(req: NextRequest) {
   await dbConnect();

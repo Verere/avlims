@@ -20,7 +20,7 @@ const ReferrerSchema: Schema = new Schema({
   refClinic: { type: Schema.Types.ObjectId, ref: 'RefClinic', required: true },
   bank: { type: String, required: true },
   account: { type: String, required: true },
-  email: { type: String, required: true },
+  email: { type: String },
   slug: { type: String, required: true, },
   branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
   isCancelled: { type: Boolean, default: false },

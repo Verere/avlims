@@ -8,11 +8,20 @@ type LedgerRow = {
   _id: string;
   amount?: number;
   bonus?: number;
+  tests?: Array<{
+    testId: string;
+    testName: string;
+    panelId?: string;
+    panelName?: string;
+    quantity?: number;
+    amount?: number;
+    bonus?: number;
+  }>;
   status?: "pending" | "paid";
   createdAt?: string;
   businessDate?: string;
   user?: string;
-  referrer?: { _id?: string; name?: string } | string;
+  referrer?: { _id?: string; name?: string; phone?: string } | string;
   testOrder?: { _id?: string; name?: string } | string;
 };
 
@@ -28,6 +37,31 @@ function referrerName(referrer: LedgerRow["referrer"]) {
   if (!referrer) return "-";
   if (typeof referrer === "string") return referrer;
   return referrer.name || "-";
+}
+
+function referrerPhone(referrer: LedgerRow["referrer"]) {
+  if (!referrer || typeof referrer === "string") return "";
+  return String(referrer.phone || "");
+}
+
+function normalizeWhatsappPhone(phone: string) {
+  let digits = phone.replace(/[^\d+]/g, "");
+  if (!digits) return "";
+
+  if (digits.startsWith("+")) {
+    return digits.slice(1);
+  }
+
+  if (digits.startsWith("00")) {
+    return digits.slice(2);
+  }
+
+  if (digits.startsWith("0")) {
+    // Default to NG country code for local numbers.
+    return `234${digits.slice(1)}`;
+  }
+
+  return digits;
 }
 
 function patientName(order: LedgerRow["testOrder"]) {
@@ -132,8 +166,9 @@ export default function ReferrerBonusPage() {
       bonus: number;
       pendingCount: number;
       paidCount: number;
-      patients: Array<{
-        name: string;
+      tests: Array<{
+        patient: string;
+        test: string;
         date: string;
         amount: number;
         bonus: number;
@@ -153,22 +188,40 @@ export default function ReferrerBonusPage() {
         bonus: 0,
         pendingCount: 0,
         paidCount: 0,
-        patients: [],
+        tests: [],
       };
 
-      current.entries += 1;
-      current.amount += Number(row.amount || 0);
-      current.bonus += Number(row.bonus || 0);
-      if (row.status === "paid") current.paidCount += 1;
-      else current.pendingCount += 1;
+      const rowTests = Array.isArray(row.tests) && row.tests.length > 0
+        ? row.tests
+        : [{
+            testId: row._id,
+            testName: "-",
+            quantity: 1,
+            amount: Number(row.amount || 0),
+            bonus: Number(row.bonus || 0),
+          }];
 
-      current.patients.push({
-        name: patient,
-        date: rowDate(row),
-        amount: Number(row.amount || 0),
-        bonus: Number(row.bonus || 0),
-        status: row.status === "paid" ? "paid" : "pending",
-      });
+      for (const test of rowTests) {
+        const testAmount = Number(test.amount || 0);
+        const testBonus = Number(test.bonus || 0);
+        const quantity = Number(test.quantity || 1);
+        const testLabel = quantity > 1 ? `${test.testName} x${quantity}` : test.testName;
+
+        current.entries += 1;
+        current.amount += testAmount;
+        current.bonus += testBonus;
+        if (row.status === "paid") current.paidCount += 1;
+        else current.pendingCount += 1;
+
+        current.tests.push({
+          patient,
+          test: testLabel,
+          date: rowDate(row),
+          amount: testAmount,
+          bonus: testBonus,
+          status: row.status === "paid" ? "paid" : "pending",
+        });
+      }
 
       grouped.set(refKey, current);
     }
@@ -176,10 +229,110 @@ export default function ReferrerBonusPage() {
     return Array.from(grouped.values())
       .map((g) => ({
         ...g,
-        patients: g.patients.sort((a, b) => b.amount - a.amount),
+        tests: g.tests.sort((a, b) => b.amount - a.amount),
       }))
       .sort((a, b) => b.amount - a.amount);
   }, [rows]);
+
+  const buildReferrerReportText = (group: any) => {
+    const lines = [
+      `Referrer: ${group.referrer}`,
+      `Entries: ${group.entries}`,
+      `Amount: ${formatCurrency(group.amount)}`,
+      `Bonus: ${formatCurrency(group.bonus)}`,
+      `Pending/Paid: ${group.pendingCount}/${group.paidCount}`,
+      "",
+      "Tests",
+    ];
+
+    for (const entry of group.tests || []) {
+      lines.push(
+        `- ${entry.patient} | ${entry.test} | ${entry.date} | ${formatCurrency(entry.amount)} | Bonus ${formatCurrency(entry.bonus)} | ${entry.status}`
+      );
+    }
+
+    return lines.join("\n");
+  };
+
+  const handlePrintReferrer = (group: any) => {
+    const popup = window.open("", "_blank", "width=900,height=700,noopener,noreferrer");
+    if (!popup) return;
+
+    const rowsHtml = (group.tests || [])
+      .map(
+        (entry: any) =>
+          `<tr>
+            <td>${entry.patient}</td>
+            <td>${entry.test}</td>
+            <td>${entry.date}</td>
+            <td style="text-align:right;">${formatCurrency(entry.amount)}</td>
+            <td style="text-align:right;">${formatCurrency(entry.bonus)}</td>
+            <td style="text-align:right; text-transform: capitalize;">${entry.status}</td>
+          </tr>`
+      )
+      .join("");
+
+    const html = `<!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Referrer Bonus Report</title>
+          <style>
+            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; }
+            h1 { margin: 0 0 8px; }
+            p { margin: 4px 0; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+            th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 13px; }
+            th { background: #f8fafc; text-align: left; }
+          </style>
+        </head>
+        <body>
+          <h1>Referrer Bonus Report</h1>
+          <p><strong>Referrer:</strong> ${group.referrer}</p>
+          <p><strong>Entries:</strong> ${group.entries}</p>
+          <p><strong>Amount:</strong> ${formatCurrency(group.amount)}</p>
+          <p><strong>Bonus:</strong> ${formatCurrency(group.bonus)}</p>
+          <p><strong>Pending/Paid:</strong> ${group.pendingCount}/${group.paidCount}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Test</th>
+                <th>Date</th>
+                <th style="text-align:right;">Amount</th>
+                <th style="text-align:right;">Bonus</th>
+                <th style="text-align:right;">Status</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </body>
+      </html>`;
+
+    popup.document.open();
+    popup.document.write(html);
+    popup.document.close();
+    popup.focus();
+    window.setTimeout(() => popup.print(), 250);
+  };
+
+  const handleEmailReferrer = (group: any) => {
+    const subject = encodeURIComponent(`Referrer Bonus Report - ${group.referrer}`);
+    const body = encodeURIComponent(buildReferrerReportText(group));
+    window.open(`mailto:?subject=${subject}&body=${body}`, "_self");
+  };
+
+  const handleWhatsappReferrer = (group: any) => {
+    const matched = rows.find((row) => referrerName(row.referrer).toLowerCase() === String(group.referrer).toLowerCase());
+    const phone = normalizeWhatsappPhone(referrerPhone(matched?.referrer));
+    if (!phone) {
+      alert("No phone number found for this referrer.");
+      return;
+    }
+
+    const text = encodeURIComponent(buildReferrerReportText(group));
+    window.open(`https://wa.me/${phone}?text=${text}`, "_blank", "noopener,noreferrer");
+  };
 
   const pageTheme = isDarkMode
     ? {
@@ -289,22 +442,48 @@ export default function ReferrerBonusPage() {
                       <div className={`text-sm font-semibold uppercase tracking-wide ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Referrer</div>
                       <div className={`text-base font-bold ${pageTheme.heading}`}>{group.referrer}</div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-                      <div>
-                        <div className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Entries</div>
-                        <div className={`font-semibold ${pageTheme.heading}`}>{group.entries}</div>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+                        <div>
+                          <div className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Entries</div>
+                          <div className={`font-semibold ${pageTheme.heading}`}>{group.entries}</div>
+                        </div>
+                        <div>
+                          <div className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Amount</div>
+                          <div className={`font-semibold ${pageTheme.heading}`}>{formatCurrency(group.amount)}</div>
+                        </div>
+                        <div>
+                          <div className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Bonus</div>
+                          <div className="font-semibold text-emerald-700">{formatCurrency(group.bonus)}</div>
+                        </div>
+                        <div>
+                          <div className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Pending / Paid</div>
+                          <div className={`font-semibold ${pageTheme.heading}`}>{group.pendingCount} / {group.paidCount}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Amount</div>
-                        <div className={`font-semibold ${pageTheme.heading}`}>{formatCurrency(group.amount)}</div>
-                      </div>
-                      <div>
-                        <div className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Bonus</div>
-                        <div className="font-semibold text-emerald-700">{formatCurrency(group.bonus)}</div>
-                      </div>
-                      <div>
-                        <div className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Pending / Paid</div>
-                        <div className={`font-semibold ${pageTheme.heading}`}>{group.pendingCount} / {group.paidCount}</div>
+
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePrintReferrer(group)}
+                          className={pageTheme.button}
+                        >
+                          Print
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEmailReferrer(group)}
+                          className={pageTheme.button}
+                        >
+                          Send Email
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleWhatsappReferrer(group)}
+                          className={pageTheme.button}
+                        >
+                          Send WhatsApp
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -314,6 +493,7 @@ export default function ReferrerBonusPage() {
                       <thead className={pageTheme.tableHead}>
                         <tr>
                           <th className="px-4 py-3 text-left">Patient</th>
+                          <th className="px-4 py-3 text-left">Test</th>
                           <th className="px-4 py-3 text-left">Date</th>
                           <th className="px-4 py-3 text-right">Amount</th>
                           <th className="px-4 py-3 text-right">Bonus</th>
@@ -321,16 +501,17 @@ export default function ReferrerBonusPage() {
                         </tr>
                       </thead>
                       <tbody className={pageTheme.tableBody}>
-                        {group.patients.map((patient) => (
-                          <tr key={`${group.referrer}-${patient.name}-${patient.date}-${patient.amount}-${patient.bonus}`} className={pageTheme.row}>
-                            <td className={`px-4 py-3 font-medium ${pageTheme.heading}`}>{patient.name}</td>
-                            <td className={`px-4 py-3 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>{patient.date}</td>
-                            <td className={`px-4 py-3 text-right font-semibold ${pageTheme.heading}`}>{formatCurrency(patient.amount)}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-emerald-700">{formatCurrency(patient.bonus)}</td>
+                        {group.tests.map((entry) => (
+                          <tr key={`${group.referrer}-${entry.patient}-${entry.test}-${entry.date}-${entry.amount}-${entry.bonus}`} className={pageTheme.row}>
+                            <td className={`px-4 py-3 font-medium ${pageTheme.heading}`}>{entry.patient}</td>
+                            <td className={`px-4 py-3 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>{entry.test}</td>
+                            <td className={`px-4 py-3 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>{entry.date}</td>
+                            <td className={`px-4 py-3 text-right font-semibold ${pageTheme.heading}`}>{formatCurrency(entry.amount)}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-emerald-700">{formatCurrency(entry.bonus)}</td>
                             <td className={`px-4 py-3 text-right font-semibold ${
-                              patient.status === "paid" ? "text-green-700" : "text-amber-700"
+                              entry.status === "paid" ? "text-green-700" : "text-amber-700"
                             }`}>
-                              {patient.status}
+                              {entry.status}
                             </td>
                           </tr>
                         ))}
