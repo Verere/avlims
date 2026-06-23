@@ -3,6 +3,8 @@ import React, { useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import RefClinicForm from "@/components/RefClinicForm/RefClinicForm";
 import addFacility from "./action";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 async function fetchBranchBySlug(branch: any) {
   try {
@@ -44,6 +46,9 @@ export default function AddRefClinicPage() {
           branch: branchDoc._id,
           slug,
         });
+        toast.success("Ref clinic added successfully");
+      } catch (error: any) {
+        toast.error(error?.message || "A ref clinic with the same information already exists");
       } finally {
         setLoading(false);
       }
@@ -52,6 +57,7 @@ export default function AddRefClinicPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <ToastContainer />
      <RefClinicForm onSubmit={handleSubmit} loading={loading} />
     </div>
   );

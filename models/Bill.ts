@@ -34,6 +34,17 @@ const BillSchema = new Schema<IBill>({
   isSettled: { type: Boolean, default: false },
 });
 
+// Keep payment totals consistent whenever a Bill document is saved.
+BillSchema.pre('save', function () {
+  const bill = this as IBill;
+  const amount = Number(bill.amount || 0);
+  const paid = Math.max(Number(bill.paid || 0), 0);
+
+  bill.paid = paid;
+  bill.balance = Math.max(amount - paid, 0);
+  bill.isSettled = paid >= amount;
+});
+
 if (mongoose.models.Bill) {
   delete mongoose.models.Bill;
 }

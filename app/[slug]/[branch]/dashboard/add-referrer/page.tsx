@@ -3,6 +3,8 @@ import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import ReferrerForm from "@/components/ReferrerForm/ReferrerForm";
 import addReferrer from "./action";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 async function fetchBranchBySlug(branch: any) {
   try {
@@ -89,6 +91,9 @@ export default function AddReferrerPage() {
           labId: labDoc._id,
           slug,
         });
+        toast.success("Referrer added successfully");
+      } catch (error: any) {
+        toast.error(error?.message || "A referrer with the same information already exists");
       } finally {
         setLoading(false);
       }
@@ -98,6 +103,7 @@ export default function AddReferrerPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <ToastContainer />
       {clinicsError && <div className="mb-4 text-sm text-red-600">{clinicsError}</div>}
       {clinicsLoading && <div className="mb-4 text-sm text-gray-600">Loading ref clinics...</div>}
       <ReferrerForm

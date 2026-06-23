@@ -65,7 +65,6 @@ export default function PatientForm({ onSubmit, loading }: PatientFormProps) {
             <option value="">Select</option>
             <option value="male">Male</option>
             <option value="female">Female</option>
-            <option value="other">Other</option>
           </select>
         </div>
       </div>
@@ -88,7 +87,6 @@ export default function PatientForm({ onSubmit, loading }: PatientFormProps) {
           value={form.address}
           onChange={handleChange}
           className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-          required
         />
       </div>
       <button

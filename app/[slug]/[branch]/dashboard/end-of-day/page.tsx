@@ -20,6 +20,13 @@ type BillRow = {
   businessDate?: string;
 };
 
+type BillPaymentRow = {
+  _id: string;
+  amount?: number;
+  lines?: Array<{ method?: string; amount?: number }>;
+  createdAt?: string;
+};
+
 type OrderRow = {
   _id: string;
   revenue?: number;
@@ -65,6 +72,7 @@ export default function EndOfDayPage() {
 
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [bills, setBills] = useState<BillRow[]>([]);
+  const [billPayments, setBillPayments] = useState<BillPaymentRow[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [expenses, setExpenses] = useState<ExpensesResponse>({ totalExpenses: 0, count: 0 });
 
@@ -88,15 +96,17 @@ export default function EndOfDayPage() {
         const branchId = String(branchDoc._id || "");
         const labId = String(branchDoc.lab || branchDoc._id || "");
 
-        const [paymentsRes, billsRes, ordersRes, expensesRes] = await Promise.all([
+        const [paymentsRes, billsRes, billPaymentsRes, ordersRes, expensesRes] = await Promise.all([
           fetch(`/api/payments`),
           fetch(`/api/bill?branchId=${encodeURIComponent(branchId)}&date=${selectedDate}`),
+          fetch(`/api/bill-payments?branchId=${encodeURIComponent(branchId)}&date=${selectedDate}`),
           fetch(`/api/test-orders?branchId=${encodeURIComponent(branchId)}`),
           fetch(`/api/expenses?branchId=${encodeURIComponent(branchId)}&labId=${encodeURIComponent(labId)}&date=${selectedDate}`),
         ]);
 
         const paymentsData = paymentsRes.ok ? await paymentsRes.json() : [];
         const billsData = billsRes.ok ? await billsRes.json() : [];
+        const billPaymentsData = billPaymentsRes.ok ? await billPaymentsRes.json() : [];
         const ordersData = ordersRes.ok ? await ordersRes.json() : [];
         const expensesData = expensesRes.ok ? await expensesRes.json() : { totalExpenses: 0, count: 0 };
 
@@ -114,6 +124,7 @@ export default function EndOfDayPage() {
         if (!mounted) return;
         setPayments(scopedPayments);
         setBills(Array.isArray(billsData) ? billsData : []);
+        setBillPayments(Array.isArray(billPaymentsData) ? billPaymentsData : []);
         setOrders(scopedOrders);
         setExpenses(expensesData || { totalExpenses: 0, count: 0 });
       } catch (e: any) {
@@ -121,6 +132,7 @@ export default function EndOfDayPage() {
         setError(e?.message || "Failed to load end-of-day summary");
         setPayments([]);
         setBills([]);
+        setBillPayments([]);
         setOrders([]);
         setExpenses({ totalExpenses: 0, count: 0 });
       } finally {
@@ -136,7 +148,7 @@ export default function EndOfDayPage() {
   }, [branchSlug, selectedDate]);
 
   const totals = useMemo(() => {
-    const methodTotals = payments.reduce(
+    const paymentMethodTotals = payments.reduce(
       (acc, row) => {
         if (!Array.isArray(row.payments)) return acc;
         for (const entry of row.payments) {
@@ -152,6 +164,30 @@ export default function EndOfDayPage() {
       { cash: 0, pos: 0, transfer: 0 }
     );
 
+    const billPaymentMethodTotals = billPayments.reduce(
+      (acc, row) => {
+        if (Array.isArray(row.lines) && row.lines.length > 0) {
+          for (const entry of row.lines) {
+            const method = String(entry?.method || '').toLowerCase();
+            const amount = Number(entry?.amount || 0);
+            if (!amount) continue;
+            if (method === 'cash') acc.cash += amount;
+            else if (method === 'pos') acc.pos += amount;
+            else if (method === 'transfer') acc.transfer += amount;
+          }
+          return acc;
+        }
+
+        const fallbackAmount = Number(row.amount || 0);
+        if (fallbackAmount) {
+          acc.transfer += fallbackAmount;
+        }
+
+        return acc;
+      },
+      { cash: 0, pos: 0, transfer: 0 }
+    );
+
     const totalPayment = payments.reduce((sum, row) => {
       const topAmount = Number(row.amount || 0);
       if (topAmount > 0) return sum + topAmount;
@@ -161,7 +197,16 @@ export default function EndOfDayPage() {
       return sum + nested;
     }, 0);
 
-    const totalCredit = bills.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const totalBillPayment = billPayments.reduce((sum, row) => {
+      const byAmount = Number(row.amount || 0);
+      if (byAmount > 0) return sum + byAmount;
+      const byLines = Array.isArray(row.lines)
+        ? row.lines.reduce((s, line) => s + Number(line?.amount || 0), 0)
+        : 0;
+      return sum + byLines;
+    }, 0);
+
+    const totalCredit = bills.reduce((sum, row) => sum + Number(row.balance || 0), 0);
 
     const totalRevenue = orders.reduce(
       (sum, row) => sum + Number(row.revenue ?? row.amount ?? 0),
@@ -170,8 +215,20 @@ export default function EndOfDayPage() {
 
     const totalExpenses = Number(expenses?.totalExpenses || 0);
 
-    return { totalPayment, totalCredit, totalRevenue, totalExpenses, ...methodTotals };
-  }, [payments, bills, orders, expenses]);
+    return {
+      totalPayment,
+      totalBillPayment,
+      totalCredit,
+      totalRevenue,
+      totalExpenses,
+      cash: paymentMethodTotals.cash,
+      pos: paymentMethodTotals.pos,
+      transfer: paymentMethodTotals.transfer,
+      billPaymentCash: billPaymentMethodTotals.cash,
+      billPaymentPos: billPaymentMethodTotals.pos,
+      billPaymentTransfer: billPaymentMethodTotals.transfer,
+    };
+  }, [payments, billPayments, bills, orders, expenses]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 p-4 md:p-6">
@@ -210,6 +267,10 @@ export default function EndOfDayPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Total Payment (Payments)</p>
             <p className="mt-1 text-xl font-bold text-blue-900">{formatCurrency(totals.totalPayment)}</p>
           </div>
+          <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Total Bill Payments</p>
+            <p className="mt-1 text-xl font-bold text-cyan-900">{formatCurrency(totals.totalBillPayment)}</p>
+          </div>
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Total Credit (Bills)</p>
             <p className="mt-1 text-xl font-bold text-indigo-900">{formatCurrency(totals.totalCredit)}</p>
@@ -239,6 +300,21 @@ export default function EndOfDayPage() {
           </div>
         </div>
 
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Bill Payments Cash</p>
+            <p className="mt-1 text-lg font-bold text-cyan-900">{formatCurrency(totals.billPaymentCash)}</p>
+          </div>
+          <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Bill Payments POS</p>
+            <p className="mt-1 text-lg font-bold text-cyan-900">{formatCurrency(totals.billPaymentPos)}</p>
+          </div>
+          <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Bill Payments Transfer</p>
+            <p className="mt-1 text-lg font-bold text-cyan-900">{formatCurrency(totals.billPaymentTransfer)}</p>
+          </div>
+        </div>
+
         <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <table className="min-w-full text-sm">
             <tbody className="divide-y divide-slate-100">
@@ -249,6 +325,10 @@ export default function EndOfDayPage() {
               <tr>
                 <td className="px-4 py-3 font-medium text-slate-700">Bills Entries</td>
                 <td className="px-4 py-3 text-right text-slate-900">{bills.length}</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 font-medium text-slate-700">Bill Payments Entries</td>
+                <td className="px-4 py-3 text-right text-slate-900">{billPayments.length}</td>
               </tr>
               <tr>
                 <td className="px-4 py-3 font-medium text-slate-700">Orders Entries</td>

@@ -6,11 +6,18 @@ import TestReferralProfile from '../models/TestReferralProfile';
 import Referrer from '@/models/Referrer';
 import { dbConnect } from '../lib/mongodb';
 
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export async function getReferrers(branchId?: string) {
   await dbConnect();
   const filter: any = { isCancelled: false };
   if (branchId) filter.branchId = branchId;
-  return Referrer.find(filter).sort({ createdAt: -1 }).lean();
+  return Referrer.find(filter)
+    .populate('refClinic', 'name')
+    .sort({ createdAt: -1 })
+    .lean();
 }
 
 
@@ -20,6 +27,31 @@ export async function createReferrer(data: any) {
   const branchId = data.branchId || data.branch;
   if (!branchId || !data.slug) {
     throw new Error("branchId and slug are required to create a referrer");
+  }
+
+  const name = String(data?.name || '').trim();
+  const phone = String(data?.phone || '').trim();
+  const email = String(data?.email || '').trim();
+
+  const duplicateConditions: any[] = [
+    { phone: { $regex: `^${escapeRegex(phone)}$`, $options: 'i' } },
+    {
+      name: { $regex: `^${escapeRegex(name)}$`, $options: 'i' },
+      phone: { $regex: `^${escapeRegex(phone)}$`, $options: 'i' },
+    },
+  ];
+  if (email) {
+    duplicateConditions.push({ email: { $regex: `^${escapeRegex(email)}$`, $options: 'i' } });
+  }
+
+  const duplicate = await Referrer.findOne({
+    branchId,
+    isCancelled: false,
+    $or: duplicateConditions,
+  }).lean();
+
+  if (duplicate) {
+    throw new Error('A referrer with the same information already exists for this branch');
   }
 
   const payload = {
@@ -70,6 +102,7 @@ export async function accrueReferralBonus({
           lab: labId,
           testOrderItem: testOrderItemId,
           referredBy: testOrderItem.referredBy,
+          tests: testOrderItem.tests,
           amount: bonus,
           type: 'BONUS',
           changedBy: userId,

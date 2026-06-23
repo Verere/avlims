@@ -4,6 +4,7 @@ import React, { useState } from "react";
 type RefClinicOption = {
   _id: string;
   name: string;
+  address?: string;
 };
 
 interface ReferrerFormProps {
@@ -87,7 +88,7 @@ export default function ReferrerForm({ onSubmit, loading, refClinics = [] }: Ref
           >
             <option value="">Select a ref clinic</option>
             {refClinics.map((clinic) => (
-              <option key={clinic?._id} value={clinic._id}>{clinic.name}</option>
+              <option key={clinic?._id} value={clinic._id}>{clinic.name} | {clinic?.address}</option>
             ))}
           </select>
           {refClinics.length === 0 && (
@@ -102,7 +103,6 @@ export default function ReferrerForm({ onSubmit, loading, refClinics = [] }: Ref
             value={form.bank}
             onChange={handleChange}
             className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            required
           />
         </div>
         <div className="flex flex-col gap-2">
@@ -113,7 +113,6 @@ export default function ReferrerForm({ onSubmit, loading, refClinics = [] }: Ref
             value={form.account}
             onChange={handleChange}
             className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            required
           />
         </div>
         <div className="flex flex-col gap-2">

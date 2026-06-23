@@ -5,6 +5,9 @@ import { usePathname } from "next/navigation";
 
 type BillRow = {
   _id: string;
+  labId?: string;
+  branchId?: string;
+  orderId?: string;
   patient?: string;
   referrer?: string;
   billTo?: string;
@@ -13,7 +16,11 @@ type BillRow = {
   balance?: number;
   businessDate?: string;
   billToName?: string;
+  billToRef?: string;
+  isSettled?: boolean;
 };
+
+type PaymentMethod = "cash" | "transfer" | "pos" | "other";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-NG", {
@@ -59,6 +66,15 @@ export default function DashboardBillingPage() {
   const [bills, setBills] = useState<BillRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
+  const [activeBill, setActiveBill] = useState<BillRow | null>(null);
+  const [payAmount, setPayAmount] = useState<string>("");
+  const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
+  const [payReference, setPayReference] = useState<string>("");
+  const [payNote, setPayNote] = useState<string>("");
+  const [paying, setPaying] = useState<boolean>(false);
+  const [paymentError, setPaymentError] = useState<string>("");
 
   useEffect(() => {
     let isMounted = true;
@@ -94,8 +110,19 @@ export default function DashboardBillingPage() {
     };
   }, [branchSlug, selectedDate]);
 
+  const filteredBills = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return bills;
+    return bills.filter(
+      (bill) =>
+        (bill.patient || "").toLowerCase().includes(q) ||
+        (bill.billToName || "").toLowerCase().includes(q) ||
+        (bill.billTo || "").toLowerCase().includes(q)
+    );
+  }, [bills, searchQuery]);
+
   const totals = useMemo(() => {
-    return bills.reduce(
+    return filteredBills.reduce(
       (acc, bill) => {
         acc.amount += Number(bill.amount || 0);
         acc.paid += Number(bill.paid || 0);
@@ -104,7 +131,93 @@ export default function DashboardBillingPage() {
       },
       { amount: 0, paid: 0, balance: 0 }
     );
-  }, [bills]);
+  }, [filteredBills]);
+
+  const openPaymentModal = (bill: BillRow) => {
+    setActiveBill(bill);
+    setPayAmount(String(Number(bill.balance || 0)));
+    setPayMethod("cash");
+    setPayReference("");
+    setPayNote("");
+    setPaymentError("");
+    setShowPaymentModal(true);
+  };
+
+  const closePaymentModal = () => {
+    if (paying) return;
+    setShowPaymentModal(false);
+    setActiveBill(null);
+    setPaymentError("");
+  };
+
+  const submitBillPayment = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!activeBill) return;
+
+    const amount = Number(payAmount || 0);
+    const balance = Number(activeBill.balance || 0);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setPaymentError("Enter a valid payment amount.");
+      return;
+    }
+
+    if (amount > balance) {
+      setPaymentError("Payment amount cannot be greater than outstanding balance.");
+      return;
+    }
+
+    setPaying(true);
+    setPaymentError("");
+
+    try {
+      let sessionUserId = "";
+      let sessionUserName = "";
+      try {
+        const sessionRes = await fetch("/api/auth/session");
+        if (sessionRes.ok) {
+          const session = await sessionRes.json();
+          sessionUserId = String(session?.user?.id || "");
+          sessionUserName = String(session?.user?.name || "");
+        }
+      } catch {
+        sessionUserId = "";
+        sessionUserName = "";
+      }
+
+      const res = await fetch("/api/bill-payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          billId: activeBill._id,
+          amount,
+          method: payMethod,
+          reference: payReference.trim() || undefined,
+          note: payNote.trim() || undefined,
+          userId: sessionUserId || undefined,
+          user: sessionUserName || "system",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to create bill payment");
+      }
+
+      const updated = data?.bill;
+      if (updated?._id) {
+        setBills((prev) => prev.map((bill) => (bill._id === updated._id ? { ...bill, ...updated } : bill)));
+      }
+
+      setShowPaymentModal(false);
+      setActiveBill(null);
+      setPaymentError("");
+    } catch (err: any) {
+      setPaymentError(err?.message || "Failed to process payment.");
+    } finally {
+      setPaying(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100">
@@ -116,8 +229,16 @@ export default function DashboardBillingPage() {
               <h1 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">Branch Bills</h1>
               <p className="mt-1 text-sm text-slate-600">View all bills for this branch by date.</p>
             </div>
-
-            <div className="flex items-end gap-2">
+ <div className="mb-3">
+          <input
+            type="text"
+            placeholder="Search by patient or bill-to..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm outline-none ring-blue-500 transition focus:ring-2"
+          />
+        </div>
+            <div className="flex flex-wrap items-end gap-2">
               <label className="flex flex-col text-sm font-medium text-slate-700">
                 Date
                 <input
@@ -153,6 +274,8 @@ export default function DashboardBillingPage() {
           </div>
         </div>
 
+       
+
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -165,29 +288,30 @@ export default function DashboardBillingPage() {
                   <th className="px-4 py-3 text-right">Amount</th>
                   <th className="px-4 py-3 text-right">Paid</th>
                   <th className="px-4 py-3 text-right">Balance</th>
+                  <th className="px-4 py-3 text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
                       Loading bills...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-red-600">
+                    <td colSpan={8} className="px-4 py-10 text-center text-red-600">
                       {error}
                     </td>
                   </tr>
-                ) : bills.length === 0 ? (
+                ) : filteredBills.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
-                      No bills found for the selected date.
+                    <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                      {searchQuery.trim() ? "No bills match your search." : "No bills found for the selected date."}
                     </td>
                   </tr>
                 ) : (
-                  bills.map((bill) => (
+                  filteredBills.map((bill) => (
                     <tr key={bill._id} className="hover:bg-slate-50">
                       <td className="whitespace-nowrap px-4 py-3 text-slate-700">{formatDate(bill.businessDate)}</td>
                       <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">{bill.patient || "-"}</td>
@@ -196,6 +320,16 @@ export default function DashboardBillingPage() {
                       <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(Number(bill.amount || 0))}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-emerald-700">{formatCurrency(Number(bill.paid || 0))}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-amber-700">{formatCurrency(Number(bill.balance || 0))}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => openPaymentModal(bill)}
+                          disabled={Number(bill.balance || 0) <= 0}
+                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        >
+                          {Number(bill.balance || 0) <= 0 ? "Paid" : "Payment"}
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -203,6 +337,107 @@ export default function DashboardBillingPage() {
             </table>
           </div>
         </div>
+
+        {showPaymentModal && activeBill && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4"
+            onClick={closePaymentModal}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl md:p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bill Payment</p>
+                  <h2 className="text-lg font-bold text-slate-900">Receive Payment</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {activeBill.patient || "-"} • {activeBill.billToName || activeBill.billTo || "-"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closePaymentModal}
+                  className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mb-4 grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="text-xs text-slate-500">Amount</div>
+                  <div className="font-semibold text-slate-800">{formatCurrency(Number(activeBill.amount || 0))}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="text-xs text-slate-500">Balance</div>
+                  <div className="font-semibold text-amber-700">{formatCurrency(Number(activeBill.balance || 0))}</div>
+                </div>
+              </div>
+
+              <form onSubmit={submitBillPayment} className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Amount to Pay</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Payment Method</label>
+                  <select
+                    value={payMethod}
+                    onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="pos">POS</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Reference (optional)</label>
+                  <input
+                    type="text"
+                    value={payReference}
+                    onChange={(e) => setPayReference(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
+                    placeholder="Transaction reference"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Note (optional)</label>
+                  <textarea
+                    value={payNote}
+                    onChange={(e) => setPayNote(e.target.value)}
+                    rows={3}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
+                    placeholder="Add note"
+                  />
+                </div>
+
+                {paymentError && <p className="text-sm font-medium text-red-600">{paymentError}</p>}
+
+                <button
+                  type="submit"
+                  disabled={paying}
+                  className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {paying ? "Processing..." : "Confirm Payment"}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
