@@ -39,6 +39,22 @@ async function softDeleteTest(id: string) {
   }
 }
 
+const emptyEditForm = {
+  id: "",
+  name: "",
+  code: "",
+  category: "",
+  subCategory: "",
+  price: "",
+  type: "lab",
+  resultType: "numeric",
+  unit: "",
+  turnaroundHours: "",
+  sampleType: "",
+  preparationInstructions: "",
+  isActive: true,
+};
+
 export default function TestsTablePage() {
   const pathname = usePathname();
   const pathParts = (pathname || "").split("/").filter(Boolean);
@@ -48,6 +64,9 @@ export default function TestsTablePage() {
   const [tests, setTests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<any>(emptyEditForm);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
 
   useEffect(() => {
@@ -93,6 +112,77 @@ export default function TestsTablePage() {
     );
   };
 
+  const openEditModal = (test: any) => {
+    setEditForm({
+      id: test.id,
+      name: test.name || "",
+      code: test.code || "",
+      category: test.category || "",
+      price: test.price ?? "",
+      type: test.type || "lab",
+      resultType: test.resultType || "numeric",
+      unit: test.unit || "",
+      turnaroundHours: test.turnaroundHours ?? "",
+      sampleType: test.sampleType || "",
+      preparationInstructions: test.preparationInstructions || "",
+      isActive: test.isActive !== false,
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSaving(true);
+    try {
+      const payload: Record<string, any> = {
+        id: editForm.id,
+        name: editForm.name.trim(),
+        code: editForm.code.trim(),
+        category: editForm.category.trim(),
+        price: Number(editForm.price),
+        type: editForm.type,
+        resultType: editForm.resultType,
+        unit: editForm.unit.trim(),
+        preparationInstructions: editForm.preparationInstructions.trim(),
+        isActive: editForm.isActive,
+      };
+
+      if (editForm.turnaroundHours !== "") {
+        payload.turnaroundHours = Number(editForm.turnaroundHours);
+      }
+
+      const res = await fetch("/api/tests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update test");
+      }
+
+      setTests((prev) =>
+        prev.map((test) =>
+          test.id === editForm.id
+            ? {
+                ...test,
+                ...payload,
+              }
+            : test
+        )
+      );
+      toast.success("Test updated");
+      setIsEditOpen(false);
+      setEditForm(emptyEditForm);
+    } catch (saveError: any) {
+      toast.error(saveError?.message || "Failed to update test");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <ToastContainer />
@@ -126,7 +216,7 @@ export default function TestsTablePage() {
                   <td className="px-6 py-4 text-center flex gap-2 justify-center">
                     <button
                       className="inline-flex items-center px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-semibold shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 transition"
-                      onClick={() => alert(`Edit test: ${test.name}`)}
+                      onClick={() => openEditModal(test)}
                       title="Edit Test"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -151,6 +241,173 @@ export default function TestsTablePage() {
           </tbody>
         </table>
       </div>
+
+      {isEditOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Edit Test</h2>
+                <p className="text-sm text-slate-500">Update the details for this test.</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200"
+                onClick={() => setIsEditOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="grid gap-4 p-6 md:grid-cols-2">
+
+             
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Name</span>
+                <input
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, name: e.target.value }))}
+                  required
+                />
+              </label>
+
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Category</span>
+                <input
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.category}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, category: e.target.value }))}
+                  required
+                />
+              </label>
+               <div className="flex flex-col gap-4 md:col-span-2 md:flex-row md:gap-6">
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Code</span>
+                <input
+                  className="rounded-lg border  w-[80px] border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.code}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, code: e.target.value }))}
+                />
+              </label>
+
+             
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Price</span>
+                <input
+                  type="number"
+                  min="0"
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.price}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, price: e.target.value }))}
+                  required
+                />
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Turnaround Hours</span>
+                <input
+                  type="number"
+                  min="0"
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.turnaroundHours}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, turnaroundHours: e.target.value }))}
+                />
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Type</span>
+                <select
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 bg-white"
+                  value={editForm.type}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, type: e.target.value }))}
+                >
+                  <option value="lab">Lab</option>
+                  <option value="scan">Scan</option>
+                </select>
+              </label>
+               </div>
+
+              <div className="flex flex-col gap-4 md:col-span-2 md:flex-row md:gap-6">
+
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Result Type</span>
+                <select
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 bg-white"
+                  value={editForm.resultType}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, resultType: e.target.value }))}
+                  >
+                  <option value="numeric">Numeric</option>
+                  <option value="qualitative">Qualitative</option>
+                  <option value="enumerated">Enumerated</option>
+                  <option value="text">Text</option>
+                </select>
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Unit</span>
+                <input
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.unit}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, unit: e.target.value }))}
+                  />
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Sample Type</span>
+                <input
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.sampleType}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, sampleType: e.target.value }))}
+                  />
+              </label>
+                  </div>
+
+              <label className="grid gap-2 md:col-span-2">
+                <span className="text-sm font-semibold text-slate-700">Preparation Instructions</span>
+                <textarea
+                  rows={4}
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.preparationInstructions}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, preparationInstructions: e.target.value }))}
+                />
+              </label>
+
+              <label className="flex items-center gap-3 md:col-span-2 text-sm font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={editForm.isActive}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, isActive: e.target.checked }))}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                Active
+              </label>
+
+              <div className="flex items-center justify-end gap-3 md:col-span-2 pt-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                  onClick={() => setIsEditOpen(false)}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                  disabled={isSaving}
+                >
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

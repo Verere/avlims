@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
       age: p.age || '',
       email: p.email || '',
       gender: p.gender || '',
+      address: p.address || '',
       dob: p.dob || '',
     }));
     return Response.json(mapped);
@@ -47,11 +48,35 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { id } = await req.json();
+    const body = await req.json();
+    const { id, ...updates } = body || {};
     if (!id) return Response.json({ error: "Missing patient id" }, { status: 400 });
-    await Patient.findByIdAndUpdate(id, { isCancelled: true });
-    return Response.json({ success: true });
+
+    const hasUpdatePayload = Object.keys(updates).some(
+      (key) => key !== "isCancelled" && updates[key] !== undefined
+    );
+
+    if (!hasUpdatePayload) {
+      await Patient.findByIdAndUpdate(id, { isCancelled: true });
+      return Response.json({ success: true });
+    }
+
+    const updateDoc: Record<string, any> = {};
+    const allowedFields = ["name", "number", "age", "gender", "email", "address", "regNumber"];
+
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        updateDoc[field] = updates[field];
+      }
+    }
+
+    const updated = await Patient.findByIdAndUpdate(id, updateDoc, { new: true });
+    if (!updated) {
+      return Response.json({ error: "Patient not found" }, { status: 404 });
+    }
+
+    return Response.json({ success: true, patient: updated });
   } catch (error) {
-    return Response.json({ error: "Failed to cancel patient" }, { status: 500 });
+    return Response.json({ error: "Failed to update patient" }, { status: 500 });
   }
 }

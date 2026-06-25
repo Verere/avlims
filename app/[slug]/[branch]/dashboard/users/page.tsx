@@ -3,15 +3,21 @@
 import React, { useEffect, useState } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-type UserRow = {
+type MembershipRow = {
   _id: string;
-  name: string;
-  email: string;
+  role: string;
+  permissions: string[];
   status: "active" | "inactive";
-  emailVerified: boolean;
   createdAt: string;
   updatedAt: string;
+  user?: {
+    _id: string;
+    name?: string;
+    email?: string;
+    status?: "active" | "inactive";
+  };
 };
 
 function formatDate(value?: string) {
@@ -25,30 +31,23 @@ function formatDate(value?: string) {
   });
 }
 
-async function fetchUsers() {
-  const res = await fetch("/api/users");
+async function fetchMemberships(labSlug: string, branchSlug: string) {
+  const query = new URLSearchParams({ labSlug, branchSlug });
+  const res = await fetch(`/api/roles?${query.toString()}`);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Failed to fetch users" }));
-    throw new Error(err.error || "Failed to fetch users");
-  }
-  return res.json();
-}
-
-async function deleteUser(userId: string) {
-  const res = await fetch("/api/users", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id: userId }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Failed to delete user" }));
-    throw new Error(err.error || "Failed to delete user");
+    const err = await res.json().catch(() => ({ error: "Failed to fetch lab memberships" }));
+    throw new Error(err.error || "Failed to fetch lab memberships");
   }
   return res.json();
 }
 
 export default function UsersPage() {
-  const [rows, setRows] = useState<UserRow[]>([]);
+  const pathname = usePathname();
+  const pathParts = (pathname || "").split("/").filter(Boolean);
+  const labSlug = pathParts[0] || "";
+  const branchSlug = pathParts[1] || "";
+
+  const [rows, setRows] = useState<MembershipRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
   const { isDarkMode } = useTheme();
@@ -60,12 +59,15 @@ export default function UsersPage() {
       setLoading(true);
       setError("");
       try {
-        const data = await fetchUsers();
+        if (!labSlug || !branchSlug) {
+          throw new Error("Missing lab or branch slug");
+        }
+        const data = await fetchMemberships(labSlug, branchSlug);
         if (!isMounted) return;
         setRows(Array.isArray(data) ? data : []);
       } catch (e: any) {
         if (!isMounted) return;
-        setError(e?.message || "Failed to fetch users");
+        setError(e?.message || "Failed to fetch lab memberships");
         setRows([]);
       } finally {
         if (isMounted) setLoading(false);
@@ -77,7 +79,7 @@ export default function UsersPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [labSlug, branchSlug]);
 
   const pageTheme = isDarkMode
     ? {
@@ -113,19 +115,6 @@ export default function UsersPage() {
         statusInactive: "px-2 py-1 rounded text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300",
       };
 
-  const handleDelete = async (userId: string, userName: string) => {
-    if (!confirm(`Are you sure you want to delete user "${userName}"?`)) {
-      return;
-    }
-
-    try {
-      await deleteUser(userId);
-      setRows((prev) => prev.filter((row) => row._id !== userId));
-    } catch (e: any) {
-      setError(e?.message || "Failed to delete user");
-    }
-  };
-
   return (
     <div className={pageTheme.shell}>
       <section className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
@@ -133,10 +122,10 @@ export default function UsersPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-                System Users
+                Branch Memberships
               </p>
               <h1 className={`mt-1 text-2xl font-bold md:text-3xl ${pageTheme.heading}`}>Users</h1>
-              <p className={`mt-1 text-sm ${pageTheme.mutedText}`}>Manage system users and their access.</p>
+              <p className={`mt-1 text-sm ${pageTheme.mutedText}`}>All lab memberships for this branch.</p>
             </div>
 
             <Link
@@ -149,7 +138,7 @@ export default function UsersPage() {
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Total Users</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Total Memberships</p>
               <p className="mt-1 text-lg font-bold text-blue-900">{rows.length}</p>
             </div>
             <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
@@ -181,39 +170,25 @@ export default function UsersPage() {
                   <tr>
                     <th className="px-4 py-3 text-left">Name</th>
                     <th className="px-4 py-3 text-left">Email</th>
+                    <th className="px-4 py-3 text-left">Role</th>
                     <th className="px-4 py-3 text-left">Status</th>
-                    <th className="px-4 py-3 text-left">Verified</th>
-                    <th className="px-4 py-3 text-left">Created</th>
-                    <th className="px-4 py-3 text-center">Actions</th>
+                    <th className="px-4 py-3 text-left">Permissions</th>
+                    <th className="px-4 py-3 text-left">Joined</th>
                   </tr>
                 </thead>
                 <tbody className={pageTheme.tableBody}>
                   {rows.map((row) => (
                     <tr key={row._id} className={pageTheme.row}>
-                      <td className="px-4 py-3 font-semibold">{row.name}</td>
-                      <td className="px-4 py-3 text-sm">{row.email}</td>
+                      <td className="px-4 py-3 font-semibold">{row.user?.name || "-"}</td>
+                      <td className="px-4 py-3 text-sm">{row.user?.email || "-"}</td>
+                      <td className="px-4 py-3 text-sm">{row.role || "-"}</td>
                       <td className="px-4 py-3">
                         <span className={row.status === "active" ? pageTheme.statusActive : pageTheme.statusInactive}>
                           {row.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs ${row.emailVerified ? "text-emerald-600" : "text-amber-600"}`}>
-                          {row.emailVerified ? "✓ Yes" : "✗ No"}
-                        </span>
-                      </td>
+                      <td className="px-4 py-3 text-sm">{Array.isArray(row.permissions) && row.permissions.length > 0 ? row.permissions.join(", ") : "-"}</td>
                       <td className="px-4 py-3 text-sm">{formatDate(row.createdAt)}</td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex gap-2 justify-center">
-                          <button className={pageTheme.editButton}>Edit</button>
-                          <button
-                            onClick={() => handleDelete(row._id, row.name)}
-                            className={pageTheme.deleteButton}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   ))}
                 </tbody>

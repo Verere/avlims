@@ -39,15 +39,39 @@ async function softDeletePatient(id: string) {
   }
 }
 
+const emptyEditForm = {
+  id: "",
+  name: "",
+  number: "",
+  age: "",
+  gender: "",
+  email: "",
+  address: "",
+};
+
+type PatientRow = {
+  _id?: string;
+  id?: string;
+  name?: string;
+  number?: string;
+  age?: number | string;
+  gender?: string;
+  email?: string;
+  address?: string;
+};
+
 export default function PatientsPage() {
   const pathname = usePathname();
   const pathParts = (pathname || "").split("/").filter(Boolean);
   const slug = pathParts[0] || "";
   const branch = pathParts[1] || "";
 
-  const [patients, setPatients] = useState([]);
+  const [patients, setPatients] = useState<PatientRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<any>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editForm, setEditForm] = useState<any>(emptyEditForm);
 
   useEffect(() => {
     async function fetchData() {
@@ -91,6 +115,68 @@ export default function PatientsPage() {
       </div>,
       { autoClose: false, closeOnClick: false }
     );
+  };
+
+  const openEditModal = (patient: any) => {
+    setEditForm({
+      id: patient._id || patient.id || "",
+      name: patient.name || "",
+      number: patient.number || "",
+      age: patient.age ?? "",
+      gender: patient.gender || "",
+      email: patient.email || "",
+      address: patient.address || "",
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSaving(true);
+    try {
+      const payload: Record<string, any> = {
+        id: editForm.id,
+        name: editForm.name.trim(),
+        number: editForm.number.trim(),
+        gender: editForm.gender,
+        email: editForm.email.trim(),
+        address: editForm.address.trim(),
+      };
+
+      if (editForm.age !== "") {
+        payload.age = Number(editForm.age);
+      }
+
+      const res = await fetch("/api/patients", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update patient");
+      }
+
+      setPatients((prev: any[]) =>
+        prev.map((patient: any) => {
+          const currentId = patient._id || patient.id;
+          if (currentId !== editForm.id) return patient;
+          return {
+            ...patient,
+            ...payload,
+          };
+        })
+      );
+
+      toast.success("Patient updated");
+      setIsEditOpen(false);
+      setEditForm(emptyEditForm);
+    } catch (saveError: any) {
+      toast.error(saveError?.message || "Failed to update patient");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -140,7 +226,7 @@ export default function PatientsPage() {
                   <td className="px-4 py-3 text-center flex gap-2 justify-center">
                     <button
                       className="inline-flex items-center px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-semibold shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 transition"
-                      onClick={() => alert(`Edit patient: ${patient.name}`)}
+                      onClick={() => openEditModal(patient)}
                       title="Edit Patient"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -165,6 +251,110 @@ export default function PatientsPage() {
           </tbody>
         </table>
       </div>
+
+      {isEditOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Edit Patient</h2>
+                <p className="text-sm text-slate-500">Update patient details and save changes.</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200"
+                onClick={() => setIsEditOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="grid gap-4 p-6 md:grid-cols-2">
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Name</span>
+                <input
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, name: e.target.value }))}
+                  required
+                />
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Phone</span>
+                <input
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.number}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, number: e.target.value }))}
+                />
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Age</span>
+                <input
+                  type="number"
+                  min="0"
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.age}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, age: e.target.value }))}
+                />
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold text-slate-700">Gender</span>
+                <select
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 bg-white"
+                  value={editForm.gender}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, gender: e.target.value }))}
+                >
+                  <option value="">Select gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+
+              <label className="grid gap-2 md:col-span-2">
+                <span className="text-sm font-semibold text-slate-700">Email</span>
+                <input
+                  type="email"
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, email: e.target.value }))}
+                />
+              </label>
+
+              <label className="grid gap-2 md:col-span-2">
+                <span className="text-sm font-semibold text-slate-700">Address</span>
+                <textarea
+                  rows={3}
+                  className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                  value={editForm.address}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, address: e.target.value }))}
+                />
+              </label>
+
+              <div className="md:col-span-2 flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                  onClick={() => setIsEditOpen(false)}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                  disabled={isSaving}
+                >
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

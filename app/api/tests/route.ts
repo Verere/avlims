@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
       unit: t.unit || '',
       sampleType: t.sampleType || '',
       turnaroundHours: t.turnaroundHours,
+      preparationInstructions: t.preparationInstructions || '',
       isActive: t.isActive !== false,
       reportTemplateRef: t.reportTemplateRef ? String(t.reportTemplateRef) : '',
     }));
@@ -41,12 +42,47 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { id } = await req.json();
+    const body = await req.json();
+    const { id, ...updates } = body || {};
     if (!id) return NextResponse.json({ error: "Missing test id" }, { status: 400 });
-    await Test.findByIdAndUpdate(id, { isCancelled: true });
-    return NextResponse.json({ success: true });
+
+    const hasUpdatePayload = Object.keys(updates).some((key) => key !== 'isCancelled' && updates[key] !== undefined);
+
+    if (!hasUpdatePayload) {
+      await Test.findByIdAndUpdate(id, { isCancelled: true });
+      return NextResponse.json({ success: true });
+    }
+
+    const updateDoc: Record<string, any> = {};
+    const allowedFields = [
+      'name',
+      'code',
+      'category',
+      'subCategory',
+      'price',
+      'type',
+      'resultType',
+      'unit',
+      'turnaroundHours',
+      'sampleType',
+      'preparationInstructions',
+      'isActive',
+    ];
+
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        updateDoc[field] = updates[field];
+      }
+    }
+
+    const updated = await Test.findByIdAndUpdate(id, updateDoc, { new: true });
+    if (!updated) {
+      return NextResponse.json({ error: 'Test not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, test: updated });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to cancel test" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to update test" }, { status: 500 });
   }
 }
 
