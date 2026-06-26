@@ -16,7 +16,7 @@ function buildInviteEmailHtml(name: string, inviteUrl: string, inviteLabContext:
     <p>Hello ${name},</p>
     <p>You have been invited to access the LIMS platform.</p>
     ${inviteLabContext ? `<p>Lab: <strong>${inviteLabContext.invitedLabName}</strong> | Branch: <strong>${inviteLabContext.invitedBranchName}</strong></p>` : ''}
-    <p>Click the link below to set your password and complete your account setup:</p>
+    <p>Click the link below to accept the invite and verify your account:</p>
     <p><a href="${inviteUrl}">${inviteUrl}</a></p>
     <p>This link expires in 24 hours.</p>
   `;
@@ -87,15 +87,15 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    const setupToken = crypto.randomBytes(32).toString('hex');
-    const setupTokenExpiry = new Date(Date.now() + 1000 * 60 * 60 * 24);
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpiry = new Date(Date.now() + 1000 * 60 * 60 * 24);
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || req.nextUrl.origin;
-    const inviteUrl = `${baseUrl}/reset-password?token=${setupToken}`;
+    const inviteUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      existingUser.passwordResetToken = setupToken;
-      existingUser.passwordResetExpiry = setupTokenExpiry;
+      existingUser.emailVerificationToken = verificationToken;
+      existingUser.emailVerificationExpires = verificationTokenExpiry;
       if (inviteLabContext) {
         existingUser.invitedLabId = inviteLabContext.invitedLabId;
         existingUser.invitedBranchId = inviteLabContext.invitedBranchId;
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
           email: existingUser.email,
           status: existingUser.status,
           emailVerified: existingUser.emailVerified,
-          message: 'User already exists. Invite email sent successfully for lab membership.',
+          message: 'User already exists. Verification invite email sent successfully.',
         },
         { status: 200 }
       );
@@ -143,8 +143,8 @@ export async function POST(req: NextRequest) {
       password: hashedPassword,
       status: data.status || 'active',
       emailVerified: false,
-      passwordResetToken: setupToken,
-      passwordResetExpiry: setupTokenExpiry,
+      emailVerificationToken: verificationToken,
+      emailVerificationExpires: verificationTokenExpiry,
       ...inviteLabContext,
     });
 
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
         emailVerified: user.emailVerified,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        message: 'User created and invite email sent successfully',
+        message: 'User created and verification invite email sent successfully',
       },
       { status: 201 }
     );

@@ -10,6 +10,7 @@ interface TestOrder {
   name: string;
   amount: number;
   status: string;
+  isCancelled?: boolean;
   createdAt: string;
   tests?: {
     id?: string;
@@ -95,7 +96,8 @@ export default function DashboardTestOrdersPage() {
         const res = await fetch(`/api/test-orders?branchId=${encodeURIComponent(branchId)}`);
         if (!res.ok) throw new Error("Failed to fetch test orders");
         const data = await res.json();
-        setOrders(Array.isArray(data) ? data : [data]);
+        const normalized = Array.isArray(data) ? data : [data];
+        setOrders(normalized.filter((order: TestOrder) => order?.isCancelled !== true));
       } catch (err: any) {
         setError(err.message || "Unknown error");
       } finally {
@@ -260,7 +262,7 @@ export default function DashboardTestOrdersPage() {
                           {formatCurrency(Number(order.discount || 0))}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm">
-                          <Link href={`./test-orders/${order._id}`} className="font-medium text-blue-700 hover:underline">
+                          <Link href={`./${order._id}`} className="font-medium text-blue-700 hover:underline">
                             View
                           </Link>
                         </td>

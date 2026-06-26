@@ -89,7 +89,7 @@ export default function EndOfDayPage() {
       setLoading(true);
       setError("");
       try {
-        const branchRes = await fetch(`/api/branches/${branchSlug}`);
+        const branchRes = await fetch(`/api/branches/${branchSlug}?isCancelled=false`);
         if (!branchRes.ok) throw new Error("Failed to fetch branch context");
         const branchDoc = await branchRes.json();
 
@@ -97,11 +97,11 @@ export default function EndOfDayPage() {
         const labId = String(branchDoc.lab || branchDoc._id || "");
 
         const [paymentsRes, billsRes, billPaymentsRes, ordersRes, expensesRes] = await Promise.all([
-          fetch(`/api/payments`),
-          fetch(`/api/bill?branchId=${encodeURIComponent(branchId)}&date=${selectedDate}`),
-          fetch(`/api/bill-payments?branchId=${encodeURIComponent(branchId)}&date=${selectedDate}`),
-          fetch(`/api/test-orders?branchId=${encodeURIComponent(branchId)}`),
-          fetch(`/api/expenses?branchId=${encodeURIComponent(branchId)}&labId=${encodeURIComponent(labId)}&date=${selectedDate}`),
+          fetch(`/api/payments?isCancelled=false`),
+          fetch(`/api/bill?branchId=${encodeURIComponent(branchId)}&date=${selectedDate}&isCancelled=false`),
+          fetch(`/api/bill-payments?branchId=${encodeURIComponent(branchId)}&date=${selectedDate}&isCancelled=false`),
+          fetch(`/api/test-orders?branchId=${encodeURIComponent(branchId)}&isCancelled=false`),
+          fetch(`/api/expenses?branchId=${encodeURIComponent(branchId)}&labId=${encodeURIComponent(labId)}&date=${selectedDate}&isCancelled=false`),
         ]);
 
         const paymentsData = paymentsRes.ok ? await paymentsRes.json() : [];

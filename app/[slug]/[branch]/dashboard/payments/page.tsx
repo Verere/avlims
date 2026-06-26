@@ -54,7 +54,7 @@ async function fetchBranchBySlug(branchSlug: string) {
 }
 
 async function fetchPayments() {
-	const res = await fetch("/api/payments");
+	const res = await fetch("/api/payments?isCancelled=false");
 	if (!res.ok) {
 		const err = await res.json().catch(() => ({ error: "Failed to fetch payments" }));
 		throw new Error(err.error || "Failed to fetch payments");

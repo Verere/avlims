@@ -18,6 +18,7 @@ export interface IPayment extends Document {
   transactionId?: string;
   slug: string;
   businessDate?: string;
+  isCancelled?: boolean;
   userId: Types.ObjectId;
   user: string;
   createdAt: Date;
@@ -42,8 +43,13 @@ const PaymentSchema = new Schema<IPayment>({
   payments: { type: [PaymentEntrySchema], required: true },
   status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
   transactionId: { type: String },
+  isCancelled: { type: Boolean, default: false },
   userId:  { type: Schema.Types.ObjectId, ref: 'User' },
   user: { type: String, required: true },
 }, { timestamps: true });
 
-export default mongoose.models.Payment || mongoose.model<IPayment>('Payment', PaymentSchema);
+if (mongoose.models.Payment) {
+  delete mongoose.models.Payment;
+}
+
+export default mongoose.model<IPayment>('Payment', PaymentSchema);

@@ -16,6 +16,7 @@ export interface IReferralLedger extends Document {
   amount: number;
   bonus: number;
   status: 'pending' | 'paid';
+  isCancelled?: boolean;
   user: string;
   branchId: Types.ObjectId;
   businessDate?: string;
@@ -41,6 +42,7 @@ const ReferralLedgerSchema = new Schema<IReferralLedger>({
   amount: { type: Number, required: true },
   bonus: { type: Number, required: true },
   status: { type: String, enum: ['pending', 'paid'], default: 'pending' },
+  isCancelled: { type: Boolean, default: false },
   businessDate: { type: String },
   user: { type: String, required: true },
   branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },

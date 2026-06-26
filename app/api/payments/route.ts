@@ -38,8 +38,6 @@ export async function POST(req: NextRequest) {
     const payment = await Payment.create({
       lab: body.labId,
       name: body.name,
-      amount: body.amount,
-      createdBy: body.userId,
       payments: body.payments,
       branch: body.branch,
       branchId: body.branchId,
@@ -51,6 +49,7 @@ export async function POST(req: NextRequest) {
       user: body.user,
       status: 'completed',
       transactionId: body.transactionId,
+      isCancelled: body.isCancelled || false,
     });
     return NextResponse.json(payment, { status: 201 });
   } catch (error) {

@@ -78,7 +78,7 @@ export default function AddUserPage() {
         throw new Error(payload?.error || "Failed to create user");
       }
 
-      setSuccess(`User created and invite link sent to ${email.trim().toLowerCase()}.`);
+      setSuccess(`User created and verification email sent to ${email.trim().toLowerCase()}.`);
       resetForm();
     } catch (err: any) {
       setError(err?.message || "Failed to create user");
@@ -97,7 +97,7 @@ export default function AddUserPage() {
             </p>
             <h1 className={`mt-1 text-2xl font-bold md:text-3xl ${pageTheme.heading}`}>Add User</h1>
             <p className={`mt-1 text-sm ${pageTheme.mutedText}`}>
-              Create a user account and automatically send an invite email with a password setup link.
+              Create a user account and automatically send an invite verification email.
             </p>
           </div>
 
@@ -148,7 +148,7 @@ export default function AddUserPage() {
 
             <div className="flex flex-wrap gap-2 pt-2">
               <button type="submit" disabled={submitting} className={pageTheme.buttonPrimary}>
-                {submitting ? "Creating user..." : "Create User & Send Invite"}
+                {submitting ? "Creating user..." : "Create User & Send Verification"}
               </button>
               <Link href="../users" className={pageTheme.buttonGhost + " inline-flex items-center"}>
                 Back to Users

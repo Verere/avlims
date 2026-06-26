@@ -16,6 +16,7 @@ export interface IBill extends Document {
   billToName: String;
   billToRef: String;
   isSettled: boolean;
+  isCancelled?: boolean;
 }
 
 const BillSchema = new Schema<IBill>({
@@ -32,6 +33,14 @@ const BillSchema = new Schema<IBill>({
   billToName: { type: String },
   billToRef: { type: String },
   isSettled: { type: Boolean, default: false },
+  isCancelled: { type: Boolean, default: false },
+});
+
+BillSchema.pre(/^find/, function (this: any) {
+  const query = this.getQuery() as Record<string, unknown>;
+  if (query.isCancelled === undefined) {
+    this.where({ isCancelled: { $ne: true } });
+  }
 });
 
 // Keep payment totals consistent whenever a Bill document is saved.

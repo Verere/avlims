@@ -26,6 +26,7 @@ export interface IBillPayment extends Document {
   userId?: Types.ObjectId;
   user: string;
   note?: string;
+  isCancelled?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,8 +62,19 @@ const BillPaymentSchema = new Schema<IBillPayment>(
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     user: { type: String, required: true },
     note: { type: String },
+    isCancelled: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
+
+function applyNotCancelledFilter(this: any) {
+  const query = this.getQuery() as Record<string, unknown>;
+  if (query.isCancelled === undefined) {
+    this.where({ isCancelled: { $ne: true } });
+  }
+}
+
+BillPaymentSchema.pre("find", applyNotCancelledFilter);
+BillPaymentSchema.pre("findOne", applyNotCancelledFilter);
 
 export default mongoose.models.BillPayment || mongoose.model<IBillPayment>('BillPayment', BillPaymentSchema);
