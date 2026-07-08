@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useTransition } from "react";
+import React, { useState } from "react";
 import { usePathname } from "next/navigation";
 import RefClinicForm from "@/components/RefClinicForm/RefClinicForm";
 import addFacility from "./action";
@@ -40,12 +40,19 @@ export default function AddRefClinicPage() {
         // Fetch branch and lab info
         const branchDoc = await fetchBranchBySlug(branch);
         if (!branchDoc || !branchDoc._id ) throw new Error("Branch or Lab not found");
-        await addFacility({
+        const result = await addFacility({
           ...data,
           branchId: branchDoc._id,
           branch: branchDoc._id,
+          branchSlug: branch,
           slug,
         });
+
+        if (result?.ok === false) {
+          toast.error(result.message || "A ref clinic with the same information already exists");
+          return;
+        }
+
         toast.success("Ref clinic added successfully");
       } catch (error: any) {
         toast.error(error?.message || "A ref clinic with the same information already exists");
