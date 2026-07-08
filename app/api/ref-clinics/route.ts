@@ -6,18 +6,26 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function toClinicSlug(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+}
+
 export async function POST(req: NextRequest) {
   await dbConnect();
   try {
     const data = await req.json();
     const name = String(data?.name || '').trim();
     const address = String(data?.address || '').trim();
-    const slug = String(data?.slug || '').trim();
     const branchId = String(data?.branchId || data?.branch || '').trim();
 
-    if (!name || !address || !slug || !branchId) {
+    if (!name || !address || !branchId) {
       return NextResponse.json(
-        { error: 'name, address, slug and branchId are required' },
+        { error: 'name, address and branchId are required' },
         { status: 400 }
       );
     }
@@ -25,13 +33,8 @@ export async function POST(req: NextRequest) {
     const duplicate = await RefClinic.findOne({
       branchId,
       isCancelled: false,
-      $or: [
-        {
-          name: { $regex: `^${escapeRegex(name)}$`, $options: 'i' },
-          address: { $regex: `^${escapeRegex(address)}$`, $options: 'i' },
-        },
-        { slug: { $regex: `^${escapeRegex(slug)}$`, $options: 'i' } },
-      ],
+      name: { $regex: `^${escapeRegex(name)}$`, $options: 'i' },
+      address: { $regex: `^${escapeRegex(address)}$`, $options: 'i' },
     }).lean();
 
     if (duplicate) {
@@ -41,7 +44,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const refClinic = await RefClinic.create(data);
+    const refClinic = await RefClinic.create({
+      ...data,
+      slug: toClinicSlug(name),
+      branchId,
+    });
     return NextResponse.json(refClinic, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to create ref clinic' }, { status: 400 });

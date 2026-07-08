@@ -5,27 +5,34 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function toClinicSlug(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
 export async function createFacilit(data: any) {
   await dbConnect();
   const branchId = data.branchId || data.branch;
-  if (!branchId || !data.slug) {
-    throw new Error("branchId and slug are required to create a facility");
+  if (!branchId) {
+    throw new Error("branchId is required to create a facility");
   }
 
   const name = String(data?.name || "").trim();
   const address = String(data?.address || "").trim();
-  const slug = String(data?.slug || "").trim();
+
+  if (!name || !address) {
+    throw new Error("name and address are required to create a facility");
+  }
 
   const duplicate = await RefClinic.findOne({
     branchId,
     isCancelled: false,
-    $or: [
-      {
-        name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
-        address: { $regex: `^${escapeRegex(address)}$`, $options: "i" },
-      },
-      { slug: { $regex: `^${escapeRegex(slug)}$`, $options: "i" } },
-    ],
+    name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
+    address: { $regex: `^${escapeRegex(address)}$`, $options: "i" },
   }).lean();
 
   if (duplicate) {
@@ -34,6 +41,7 @@ export async function createFacilit(data: any) {
 
   const payload = {
     ...data,
+    slug: toClinicSlug(name),
     branchId,
   };
 
