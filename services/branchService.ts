@@ -5,7 +5,7 @@ export async function getBranchBySlug(slug: string) {
   await dbConnect();
   const pattern = new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
   const branch = await Branch.findOne({
-    $or: [{ branch: pattern }],
+    $or: [{ slug: pattern }, { branch: pattern }],
   });
   return branch;
 }

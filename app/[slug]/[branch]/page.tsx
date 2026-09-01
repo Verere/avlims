@@ -968,6 +968,7 @@ export default function LaboratoryRegistrationPage() {
 			const pathParts = pathname.split("/").filter(Boolean);
 			const labSlug = pathParts[0] || "";
 			const branchSlug = pathParts[1] || "";
+			console.log("Lab Slug:", labSlug, "Branch Slug:", branchSlug);
 
 			if (!labSlug || !branchSlug) {
 				throw new Error("Invalid URL. Missing lab or branch.");

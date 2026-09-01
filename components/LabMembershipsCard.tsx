@@ -1,11 +1,26 @@
 "use client";
 import React from "react";
 import { useRouter } from "next/navigation";
-import { HiUserGroup, HiOfficeBuilding, HiLocationMarker, HiUser, HiCheckCircle, HiOutlineArrowRight } from "react-icons/hi";
+import { HiUserGroup, HiLocationMarker, HiUser, HiCheckCircle, HiOutlineArrowRight } from "react-icons/hi";
 
+type Membership = {
+  _id: string;
+  lab?: string;
+  branch?: string;
+  name: string;
+  role: string;
+  status: string;
+};
 
-export default function LabMembershipsCard({ memberships }: { memberships: any[] }) {
+export default function LabMembershipsCard({ memberships }: { memberships: Membership[] }) {
   const router = useRouter();
+  const toRouteSegment = (value: unknown) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)+/g, "");
+
   if (!memberships || memberships.length === 0) {
     return (
       <div className="p-6 text-center text-gray-500">
@@ -60,11 +75,12 @@ export default function LabMembershipsCard({ memberships }: { memberships: any[]
               aria-label={`Go to ${m.lab} ${m.branch}`}
               onClick={() => {
                 if (!m.lab || !m.branch) return;
-                const branchSlug = encodeURIComponent(m.branch.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, ""));
-                const dest = m.role === "owner"
-                  ? `/${m.lab}/${branchSlug}/dashboard`
-                  : `/${m.lab}/${branchSlug}`;
-                router.push(dest);
+                const labSlug = toRouteSegment(m.lab);
+                const branchSlug = toRouteSegment(m.branch);
+                const destination = m.role === "owner"
+                  ? `/${labSlug}/${branchSlug}/dashboard`
+                  : `/${labSlug}/${branchSlug}`;
+                router.push(destination);
               }}
               type="button"
             >

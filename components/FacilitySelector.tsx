@@ -49,8 +49,11 @@ export default function FacilitySelector({ selected, onSelect, onAddNew, refresh
         const res = await fetch(`/api/ref-clinics?branchId=${branchDoc._id}`);
         if (res.ok) {
           const data = await res.json();
-          
-          setFacilities(data);
+          setFacilities(data.map((facility: { _id?: string; id?: string; name: string; address?: string }) => ({
+            id: String(facility.id || facility._id || ""),
+            name: facility.name,
+            address: facility.address || "",
+          })));
         } else {
           setFacilities([]);
         }
