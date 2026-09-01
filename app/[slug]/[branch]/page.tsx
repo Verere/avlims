@@ -241,6 +241,8 @@ export default function LaboratoryRegistrationPage() {
 		bonusAmount: number;
 		revenueAmount: number;
 		balanceAmount: number;
+		receiptTitle?: string;
+		billTo?: string;
 		},
 		targetWindow?: Window | null
 	) => {
@@ -271,33 +273,49 @@ export default function LaboratoryRegistrationPage() {
 			<html>
 				<head>
 					<meta charset="utf-8" />
-					<title>Payment Receipt</title>
+					<title>${escapeHtml(payload.receiptTitle || "Payment Receipt")}</title>
 					<style>
 						@page { size: 80mm auto; margin: 0; }
-						body { font-family: Arial, Helvetica, sans-serif; margin: 0 auto; padding: 8px; width: 80mm; color: #0f172a; box-sizing: border-box; }
-						h1 { margin: 0 0 4px; font-size: 22px; }
-						.lab-name { margin: 2px 0 6px; font-size: 18px; font-weight: 700; }
-						p { margin: 3px 0; }
-						table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-						th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 13px; }
-						th { background: #f1f5f9; text-align: left; }
-						.section { margin-top: 16px; }
-						.summary td:first-child { width: 60%; }
-						.footer { margin-top: 24px; font-size: 12px; color: #475569; }
+						* { box-sizing: border-box; }
+						body { width: 80mm; margin: 0 auto; padding: 5mm 4mm 7mm; font-family: "Courier New", Courier, monospace; color: #172033; font-size: 13px; font-weight: 600; line-height: 1.45; }
+						.receipt-header { padding-bottom: 10px; border-bottom: 2px solid #172033; text-align: center; }
+						.receipt-type { display: inline-block; margin-bottom: 5px; padding: 2px 7px; border: 1px solid #172033; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+						.lab-name { margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 21px; font-weight: 800; line-height: 1.15; }
+						.branch-name { margin-top: 4px; color: #475569; font-size: 12px; font-weight: 800; text-transform: uppercase; }
+						.contact { margin: 5px 0 0; color: #475569; font-size: 11px; font-weight: 700; }
+						.details { display: grid; grid-template-columns: 1fr; gap: 3px; margin-top: 11px; padding-bottom: 10px; border-bottom: 1px dashed #64748b; }
+						.detail { display: flex; justify-content: space-between; gap: 10px; }
+						.detail-label { flex-shrink: 0; color: #64748b; font-weight: 800; }
+						.detail-value { text-align: right; font-weight: 800; overflow-wrap: anywhere; }
+						.section { margin-top: 13px; }
+						.section-title { margin: 0 0 5px; color: #334155; font-size: 12px; font-weight: 800; letter-spacing: 0.7px; text-transform: uppercase; }
+						table { width: 100%; border-collapse: collapse; }
+						th, td { padding: 7px 2px; border-bottom: 1px solid #d5dbe5; font-size: 12px; }
+						th { color: #475569; border-top: 1px solid #172033; background: #f4f6f8; font-size: 11px; font-weight: 800; letter-spacing: 0.4px; text-align: left; text-transform: uppercase; }
+						th:last-child, td:last-child { text-align: right !important; white-space: nowrap; }
+						.summary td { padding: 4px 2px; border: 0; }
+						.summary .total-row td { padding-top: 9px; border-top: 1px solid #172033; font-size: 15px; font-weight: 800; }
+						.summary .balance-row td { padding: 7px; background: #172033; color: white; font-size: 13px; font-weight: 800; }
+						.footer { margin-top: 17px; padding-top: 10px; border-top: 1px dashed #64748b; color: #475569; font-size: 11px; font-weight: 700; text-align: center; }
 					</style>
 				</head>
 				<body>
-					<h1>Payment Receipt</h1>
-					<div class="lab-name">${escapeHtml(payload.labName || "-")}</div>
-					<p><strong>Address:</strong> ${escapeHtml(payload.address || "-")}</p>
-					<p><strong>Branch:</strong> ${escapeHtml(payload.branchName || "-")}</p>
-					<p><strong>Phone:</strong> ${escapeHtml(payload.branchPhone || "-")}</p>
-					<p><strong>Patient:</strong> ${escapeHtml(payload.patientName || "-")}</p>
-					<p><strong>Transaction ID:</strong> ${escapeHtml(payload.transactionId || "-")}</p>
-					<p><strong>Date:</strong> ${escapeHtml(new Date(payload.date).toLocaleString())}</p>
+					<header class="receipt-header">
+						<div class="receipt-type">${escapeHtml(payload.receiptTitle || "Payment Receipt")}</div>
+						<div class="lab-name">${escapeHtml(payload.labName || "Laboratory")}</div>
+						<div class="branch-name">${escapeHtml(payload.branchName || "-")}</div>
+						<p class="contact">${escapeHtml(payload.address || "-")} | ${escapeHtml(payload.branchPhone || "-")}</p>
+					</header>
+
+					<div class="details">
+						<div class="detail"><span class="detail-label">Patient</span><span class="detail-value">${escapeHtml(payload.patientName || "-")}</span></div>
+						${payload.billTo ? `<div class="detail"><span class="detail-label">Bill To</span><span class="detail-value">${escapeHtml(payload.billTo)}</span></div>` : ""}
+						<div class="detail"><span class="detail-label">Reference</span><span class="detail-value">${escapeHtml(payload.transactionId || "-")}</span></div>
+						<div class="detail"><span class="detail-label">Issued</span><span class="detail-value">${escapeHtml(new Date(payload.date).toLocaleString())}</span></div>
+					</div>
 
 					<div class="section">
-						<strong>Investigation</strong>
+						<div class="section-title">Investigations</div>
 						<table>
 							<thead><tr><th>Item</th><th style="text-align:right;">Amount</th></tr></thead>
 							<tbody>${itemsHtml || "<tr><td>-</td><td style='text-align:right;'>N0</td></tr>"}</tbody>
@@ -305,7 +323,7 @@ export default function LaboratoryRegistrationPage() {
 					</div>
 
 					<div class="section">
-						<strong>Payment Methods</strong>
+						<div class="section-title">Payment Methods</div>
 						<table>
 							<thead><tr><th>Method</th><th style="text-align:right;">Amount</th></tr></thead>
 							<tbody>${paymentsHtml || "<tr><td>-</td><td style='text-align:right;'>N0</td></tr>"}</tbody>
@@ -313,13 +331,13 @@ export default function LaboratoryRegistrationPage() {
 					</div>
 
 					<div class="section">
-						<strong>Summary</strong>
+						<div class="section-title">Summary</div>
 						<table class="summary">
 							<tbody>
 								<tr><td>Subtotal</td><td style="text-align:right;">${formatMoney(payload.subtotalAmount)}</td></tr>
 								<tr><td>Discount</td><td style="text-align:right;">${formatMoney(payload.discountAmount)}</td></tr>
-								<tr><td>Total</td><td style="text-align:right;"><strong>${formatMoney(payload.totalAmount)}</strong></td></tr>
-								<tr><td>Balance</td><td style="text-align:right;">${formatMoney(payload.balanceAmount)}</td></tr>
+								<tr class="total-row"><td>Total</td><td style="text-align:right;">${formatMoney(payload.totalAmount)}</td></tr>
+								<tr class="balance-row"><td>Balance Due</td><td style="text-align:right;">${formatMoney(payload.balanceAmount)}</td></tr>
 							</tbody>
 						</table>
 					</div>
@@ -497,7 +515,7 @@ export default function LaboratoryRegistrationPage() {
 				orderId: orderData._id || orderData.id, // required
 				bDate: orderData.bDate, // required (maps to businessDate)
 				// Optional fields
-				transactionId: `PAY-${Date.now()}`,
+				transactionId: orderData.transId,
 			};
 
 			// 7. Send payment
@@ -524,7 +542,7 @@ export default function LaboratoryRegistrationPage() {
 			}
 
 			printReceipt({
-				transactionId: String(paymentData?.transactionId || paymentPayload.transactionId || "-"),
+				transactionId: String(orderData.transId || paymentData?.transactionId || "-"),
 				patientName: selectedPatient.name,
 				branchName: String(pathname.split("/")[2] || "-"),
 				branchPhone: String(branchDoc?.phone || "-"),
@@ -583,6 +601,10 @@ export default function LaboratoryRegistrationPage() {
 		}
 	};
 	const handleSavePending = () => {
+		if (totalPaid >= total) {
+			toast.warn("Bill To is only available when the amount paid is less than the total.");
+			return;
+		}
 		setShowBillPopup(true);
 	};
 
@@ -626,6 +648,13 @@ export default function LaboratoryRegistrationPage() {
 		setBillTo(resolvedBillTo);
 		setBillToRef(resolvedBillToRef);
 		setBillToName(resolvedBillToName);
+
+		const receiptWindow = window.open("", "_blank", "width=900,height=700");
+		if (receiptWindow) {
+			receiptWindow.document.open();
+			receiptWindow.document.write("<p style='font-family:Arial;padding:16px;'>Preparing bill receipt...</p>");
+			receiptWindow.document.close();
+		}
 
 			// 1. Get branch slug from URL
 			const pathname = window.location.pathname;
@@ -740,6 +769,38 @@ export default function LaboratoryRegistrationPage() {
 				const err = await billRes.json();
 				throw new Error(err.error || "Bill creation failed");
 			}
+			const billData = await billRes.json();
+
+			const groupedItems = new Map<string, { name: string; amount: number }>();
+			for (const entry of cart) {
+				const key = entry.panel ? `panel:${entry.panel.id}` : `test:${entry.test.id}`;
+				if (!groupedItems.has(key)) {
+					groupedItems.set(key, {
+						name: entry.panel ? `${entry.panel.name} (Panel)` : entry.test.name,
+						amount: entry.panel ? Number(entry.panel.price || 0) : Number(entry.test.price || 0) * Number(entry.quantity || 1),
+					});
+				}
+			}
+
+			printReceipt({
+				receiptTitle: "Bill Receipt",
+				billTo: `${billToForBill}: ${resolvedBillToName}`,
+				transactionId: String(orderData.transId || "-"),
+				patientName: selectedPatient.name,
+				branchName: String(branchDoc?.branch || pathname.split("/")[2] || "-"),
+				branchPhone: String(branchDoc?.phone || "-"),
+				labName: String(pathname.split("/")[1] || "Laboratory"),
+				address: String(branchDoc?.address || "-"),
+				date: String(billData?.businessDate || orderData?.bDate || new Date().toISOString()),
+				items: Array.from(groupedItems.values()),
+				paymentsMade: payments.filter((payment) => payment.amount > 0),
+				subtotalAmount: subtotal,
+				discountAmount: discountEnabled ? discount : 0,
+				totalAmount: total,
+				bonusAmount: bonus,
+				revenueAmount: revenue,
+				balanceAmount: Number(billData?.balance ?? balance),
+			}, receiptWindow);
 
 
 		

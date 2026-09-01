@@ -4,6 +4,7 @@ export interface IOrder extends Document {
   patientId: string;
   name: string;
   tests: any[];
+  transId?: string;
   amount: number;
   amountPaid: number;
   bal: number;
@@ -32,6 +33,7 @@ const OrderSchema: Schema<IOrder> = new mongoose.Schema({
   patientId:{type: String},
   name:{type: String},
   tests: [mongoose.Schema.Types.Mixed],
+  transId: { type: String, unique: true, sparse: true },
   amount: {type: Number}, 
   amountPaid: {type: Number, default:0}, 
   bal: {type: Number},  
