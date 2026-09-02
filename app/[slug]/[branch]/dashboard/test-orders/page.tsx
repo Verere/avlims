@@ -6,6 +6,7 @@ import Link from "next/link";
 
 interface TestOrder {
   _id: string;
+  transId?: string;
   patientId: string;
   name: string;
   amount: number;
@@ -216,6 +217,7 @@ export default function DashboardTestOrdersPage() {
                 <tr>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Time</th>
+                  <th className="px-4 py-3 text-left">Transaction ID</th>
                   <th className="px-4 py-3 text-left">Patient</th>
                   <th className="px-4 py-3 text-left">Tests</th>
                   <th className="px-4 py-3 text-left">Referrer</th>
@@ -228,19 +230,19 @@ export default function DashboardTestOrdersPage() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
                       Loading test orders...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-red-600">
+                    <td colSpan={10} className="px-4 py-10 text-center text-red-600">
                       {error}
                     </td>
                   </tr>
                 ) : filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
                       No test orders found for the selected date.
                     </td>
                   </tr>
@@ -251,6 +253,7 @@ export default function DashboardTestOrdersPage() {
                       <tr key={order._id} className="hover:bg-slate-50">
                         <td className="whitespace-nowrap px-4 py-3 text-slate-700">{formatDate(orderDate)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-slate-700">{formatTime(orderDate)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 font-mono text-slate-700">{order.transId || "-"}</td>
                         <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">{order.name || "-"}</td>
                         <td className="max-w-xs px-4 py-3 text-slate-700">{renderTestsCell(order.tests)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-slate-700">{order.referral || "-"}</td>
