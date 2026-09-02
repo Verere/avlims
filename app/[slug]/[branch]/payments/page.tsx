@@ -82,7 +82,7 @@ export default function PaymentsPage() {
         const branchDoc = await branchRes.json();
         const branchId = branchDoc._id;
 
-        const res = await fetch(`/api/payments?branchId=${encodeURIComponent(branchId)}`);
+        const res = await fetch(`/api/payments?branchId=${encodeURIComponent(branchId)}&isCancelled=false`);
         if (!res.ok) throw new Error("Failed to fetch payments");
         const data = await res.json();
         setPayments(Array.isArray(data) ? data : [data]);

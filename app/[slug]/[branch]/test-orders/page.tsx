@@ -11,6 +11,8 @@ interface TestOrder {
   patientId: string;
   name: string;
   amount: number;
+  amountPaid?: number;
+  bal?: number;
   status: string;
   createdAt: string;
   tests?: {
@@ -164,6 +166,73 @@ export default function TestOrdersPage() {
     );
   };
 
+  const printReceipt = async (order: TestOrder) => {
+    const receiptWindow = window.open("", "_blank", "width=900,height=700");
+    if (!receiptWindow) return;
+
+    receiptWindow.document.open();
+    receiptWindow.document.write("<p style='font-family:Arial;padding:16px;'>Preparing receipt...</p>");
+    receiptWindow.document.close();
+
+    try {
+      const pathParts = (pathname || "").split("/").filter(Boolean);
+      const [labSlug, branchSlug] = pathParts;
+      const branchRes = await fetch(`/api/branches/${branchSlug}`);
+      const branchDoc = branchRes.ok ? await branchRes.json() : {};
+      const labRes = labSlug ? await fetch(`/api/labs/${labSlug}`) : null;
+      const labDoc = labRes?.ok ? await labRes.json() : {};
+      const escapeHtml = (value: unknown) =>
+        String(value ?? "-")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      const testsHtml = (order.tests || [])
+        .map((test) => {
+          const amount = test.panel ? Number(test.panel.price || 0) : Number(test.price || 0) * Number(test.quantity || 1);
+          const name = test.panel ? `${test.panel.name} (Panel)` : test.name;
+          return `<tr><td>${escapeHtml(name)}</td><td>${formatCurrency(amount)}</td></tr>`;
+        })
+        .join("");
+      const orderDate = order.bDate || order.createdAt;
+      const total = Number(order.amount || 0);
+      const paid = Number(order.amountPaid || 0);
+      const balance = Number(order.bal ?? total - paid);
+
+      receiptWindow.document.open();
+      receiptWindow.document.write(`<!doctype html>
+        <html><head><meta charset="utf-8"><title>Test Order Receipt</title>
+        <style>
+          @page { size: 80mm auto; margin: 0; }
+          * { box-sizing: border-box; }
+          body { width: 80mm; margin: 0 auto; padding: 5mm 4mm 7mm; color: #172033; font: 600 12px/1.45 "Courier New", monospace; }
+          header { padding-bottom: 10px; border-bottom: 2px solid #172033; text-align: center; }
+          h1 { margin: 0; font: 800 20px/1.15 Arial, sans-serif; }
+          .branch, .contact { margin-top: 4px; color: #475569; font-size: 11px; }
+          .details { margin: 11px 0; padding-bottom: 9px; border-bottom: 1px dashed #64748b; }
+          .detail { display: flex; justify-content: space-between; gap: 10px; margin: 3px 0; }
+          .label { color: #64748b; } table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+          th, td { padding: 6px 2px; border-bottom: 1px solid #d5dbe5; text-align: left; }
+          th { background: #f4f6f8; color: #475569; font-size: 10px; text-transform: uppercase; }
+          th:last-child, td:last-child { text-align: right; white-space: nowrap; }
+          .summary td { border: 0; padding: 3px 2px; } .summary .total td { padding-top: 8px; border-top: 1px solid #172033; font-size: 14px; }
+          footer { margin-top: 15px; padding-top: 9px; border-top: 1px dashed #64748b; color: #475569; font-size: 11px; text-align: center; }
+        </style></head><body>
+          <header><h1>${escapeHtml(labDoc.name || labSlug || "Laboratory")}</h1><div class="branch">${escapeHtml(branchDoc.name || branchSlug || "-")}</div><div class="contact">${escapeHtml(branchDoc.address || labDoc.address || "-")} | ${escapeHtml(branchDoc.phone || "-")}</div></header>
+          <div class="details"><div class="detail"><span class="label">Patient</span><span>${escapeHtml(order.name)}</span></div><div class="detail"><span class="label">Reference</span><span>${escapeHtml(order.transId)}</span></div><div class="detail"><span class="label">Issued</span><span>${escapeHtml(formatDate(orderDate))} ${escapeHtml(formatTime(orderDate))}</span></div></div>
+          <table><thead><tr><th>Investigation</th><th>Amount</th></tr></thead><tbody>${testsHtml || "<tr><td>-</td><td>N0</td></tr>"}</tbody></table>
+          <table class="summary"><tbody><tr><td>Total</td><td>${formatCurrency(total)}</td></tr><tr><td>Paid</td><td>${formatCurrency(paid)}</td></tr><tr class="total"><td>Balance Due</td><td>${formatCurrency(balance)}</td></tr></tbody></table>
+          <footer>Thanks for your Patronage</footer>
+        </body></html>`);
+      receiptWindow.document.close();
+      receiptWindow.focus();
+      window.setTimeout(() => receiptWindow.print(), 350);
+    } catch {
+      receiptWindow.close();
+    }
+  };
+
   return (
     <>
       <Navbar />
@@ -265,9 +334,18 @@ export default function TestOrdersPage() {
                             {formatCurrency(Number(order.discount || 0))}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-sm">
-                            <Link href={`./test-orders/${order._id}`} className="font-medium text-blue-700 hover:underline">
-                              View
-                            </Link>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => printReceipt(order)}
+                                className="font-medium text-slate-700 hover:underline"
+                              >
+                                Print receipt
+                              </button>
+                              <Link href={`./test-orders/${order._id}`} className="font-medium text-blue-700 hover:underline">
+                                View
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       );

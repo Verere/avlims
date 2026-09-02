@@ -7,9 +7,13 @@ export async function GET(req: NextRequest) {
   await dbConnect();
   try {
     const branchId = req.nextUrl.searchParams.get("branchId");
+    const isCancelled = req.nextUrl.searchParams.get("isCancelled");
     const query: Record<string, any> = {};
     if (branchId) {
       query.branchId = branchId;
+    }
+    if (isCancelled === "true" || isCancelled === "false") {
+      query.isCancelled = isCancelled === "true";
     }
     const payments = await Payment.find(query).sort({ createdAt: -1 });
     console.log('Fetched', payments);
