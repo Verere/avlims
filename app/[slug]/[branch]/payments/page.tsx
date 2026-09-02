@@ -13,7 +13,7 @@ interface Payment {
   patient?: string;
   user?: string;
   slug?: string;
-  orderId?: string;
+  transactionId?: string;
   businessDate?: string;
   status?: string;
   createdAt?: string;
@@ -174,7 +174,7 @@ export default function PaymentsPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-blue-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-blue-900 uppercase">Order ID</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-blue-900 uppercase">Transaction ID</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-blue-900 uppercase">Name</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-blue-900 uppercase">Payments</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-blue-900 uppercase">User</th>
@@ -191,7 +191,7 @@ export default function PaymentsPage() {
                 }
                 return (
                   <tr key={payment._id} className={`transition ${idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'} hover:bg-blue-100`}>
-                    <td className="px-4 py-2 text-sm font-mono">{payment.orderId || <span className="text-gray-400">-</span>}</td>
+                    <td className="px-4 py-2 text-sm font-mono">{payment.transactionId || <span className="text-gray-400">-</span>}</td>
                     <td className="px-4 py-2 text-sm">{payment.name || <span className="text-gray-400">-</span>}</td>
                     <td className="px-4 py-2 text-sm">{paymentsDisplay}</td>
                     <td className="px-4 py-2 text-sm">{payment.user || <span className="text-gray-400">-</span>}</td>

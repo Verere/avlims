@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 
 type BillRow = {
   _id: string;
+  transId?: string;
   patient?: string;
   referrer?: string;
   billTo?: string;
@@ -161,6 +162,7 @@ export default function BillsPage() {
               <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
                 <tr>
                   <th className="px-4 py-3 text-left">Date</th>
+                  <th className="px-4 py-3 text-left">Transaction ID</th>
                   <th className="px-4 py-3 text-left">Patient</th>
                   <th className="px-4 py-3 text-left">Referrer</th>
                   <th className="px-4 py-3 text-left">Bill To</th>
@@ -172,19 +174,19 @@ export default function BillsPage() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
                       Loading bills...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-red-600">
+                    <td colSpan={8} className="px-4 py-10 text-center text-red-600">
                       {error}
                     </td>
                   </tr>
                 ) : bills.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
                       No bills found for the selected date.
                     </td>
                   </tr>
@@ -192,6 +194,7 @@ export default function BillsPage() {
                   bills.map((bill) => (
                     <tr key={bill._id} className="hover:bg-slate-50">
                       <td className="whitespace-nowrap px-4 py-3 text-slate-700">{formatDate(bill.businessDate)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-slate-700">{bill.transId || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">{bill.patient || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-700">{bill.referrer || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-700">{bill.billToName || bill.billTo || "-"}</td>

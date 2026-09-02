@@ -755,6 +755,7 @@ export default function LaboratoryRegistrationPage() {
 				paid: totalPaid,
 				balance: balance,
 				orderId: orderData._id || orderData.id,
+				transId: orderData.transId,
 				businessDate: orderData.bDate || new Date().toISOString(),
 				billTo: billToForBill,
 				billToName: resolvedBillToName,
@@ -770,6 +771,32 @@ export default function LaboratoryRegistrationPage() {
 				throw new Error(err.error || "Bill creation failed");
 			}
 			const billData = await billRes.json();
+
+			if (totalPaid > 0) {
+				const paymentRes = await fetch("/api/payments", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						labId: branchDoc.lab || branchDoc._id,
+						name: selectedPatient.name,
+						amount: totalPaid,
+						userId: user.id,
+						user: user.name,
+						branchId,
+						payments: payments.filter((payment) => payment.amount > 0),
+						branch: pathname.split("/")[2],
+						patient: selectedPatient.id,
+						slug: branchSlug,
+						orderId: orderData._id || orderData.id,
+						bDate: orderData.bDate,
+						transactionId: orderData.transId,
+					}),
+				});
+				if (!paymentRes.ok) {
+					const err = await paymentRes.json();
+					throw new Error(err.error || "Payment failed");
+				}
+			}
 
 			const groupedItems = new Map<string, { name: string; amount: number }>();
 			for (const entry of cart) {

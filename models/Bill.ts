@@ -11,6 +11,7 @@ export interface IBill extends Document {
   paid: number;
   balance: number;
   orderId: Types.ObjectId;
+  transId: string;
   businessDate: Date;
   billTo: BillTo;
   billToName: String;
@@ -28,6 +29,7 @@ const BillSchema = new Schema<IBill>({
   paid: { type: Number, required: true },
   balance: { type: Number, required: true },
   orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true },
+  transId: { type: String, required: true },
   businessDate: { type: Date, required: true },
   billTo: { type: String, enum: ['Patient', 'RefClinic', 'Referrer'], required: true },
   billToName: { type: String },

@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       'paid',
       'balance',
       'orderId',
+      'transId',
       'businessDate',
       'billTo',
       'billToName',
