@@ -72,6 +72,14 @@ export default function PatientsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState<any>(emptyEditForm);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredPatients = patients.filter((patient) => {
+    if (!normalizedSearchQuery) return true;
+    return [patient.name, patient.number, patient.email, patient.age, patient.gender, patient.address]
+      .some((value) => String(value ?? "").toLowerCase().includes(normalizedSearchQuery));
+  });
 
   useEffect(() => {
     async function fetchData() {
@@ -184,12 +192,22 @@ export default function PatientsPage() {
       <ToastContainer />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
         <h1 className="text-3xl font-bold text-gray-800">Patients</h1>
-        <Link
-          href="./add-patient"
-          className="bg-blue-600 text-white px-5 py-2 rounded-lg shadow hover:bg-blue-700 transition text-center font-semibold"
-        >
-          + Add Patient
-        </Link>
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search patients"
+            aria-label="Search patients"
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:w-64"
+          />
+          <Link
+            href="./add-patient"
+            className="bg-blue-600 text-white px-5 py-2 rounded-lg shadow hover:bg-blue-700 transition text-center font-semibold whitespace-nowrap"
+          >
+            + Add Patient
+          </Link>
+        </div>
       </div>
       <div className="overflow-x-auto rounded-xl shadow-lg bg-white">
         <table className="min-w-full text-sm">
@@ -207,12 +225,12 @@ export default function PatientsPage() {
               <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">Loading...</td></tr>
             ) : error ? (
               <tr><td colSpan={5} className="px-6 py-8 text-center text-red-500">{error}</td></tr>
-            ) : patients.length === 0 ? (
+            ) : filteredPatients.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center py-8 text-gray-400">No patients found.</td>
+                <td colSpan={5} className="text-center py-8 text-gray-400">No matching patients found.</td>
               </tr>
             ) : (
-              patients.map((patient: any, idx: number) => (
+              filteredPatients.map((patient: any, idx: number) => (
                 <tr
                   key={patient._id || patient.id}
                   className={

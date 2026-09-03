@@ -8,6 +8,7 @@ import Lab from "@/models/Lab";
 
 import LabBranchesCard from "@/components/LabBranchesCard";
 import LabMembershipsSection from "@/components/LabMembershipsSection";
+import AuditLogPanel from "@/components/AuditLogPanel";
 import { getUserLabMemberships } from "./lab/memberships/actions";
 
 
@@ -64,6 +65,7 @@ export default async function Dashboard() {
       </div>
       {/* Lab Memberships Card Section */}
       <LabMembershipsSection memberships={memberships} />
+      <AuditLogPanel memberships={memberships} />
     </div>
   );
 }

@@ -37,6 +37,14 @@ export default function RefClinicsTablePage() {
   const [editForm, setEditForm] = useState({ name: "", address: "", slug: "" });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredRefClinics = refClinics.filter((clinic) => {
+    if (!normalizedSearchQuery) return true;
+    return [clinic.name, clinic.address]
+      .some((value) => String(value ?? "").toLowerCase().includes(normalizedSearchQuery));
+  });
 
   const openEditModal = (clinic: any) => {
     setEditingClinic(clinic);
@@ -143,7 +151,17 @@ export default function RefClinicsTablePage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <ToastContainer />
-      <h1 className="text-3xl font-bold text-gray-800 mb-4">Facility / Clinic</h1>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-3xl font-bold text-gray-800">Facility / Clinic</h1>
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search facilities"
+          aria-label="Search facilities and clinics"
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:w-64"
+        />
+      </div>
       {error && <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         <table className="min-w-full">
@@ -159,10 +177,10 @@ export default function RefClinicsTablePage() {
               <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">Loading...</td></tr>
             ) : error ? (
               <tr><td colSpan={4} className="px-6 py-4 text-center text-red-500">{error}</td></tr>
-            ) : refClinics.length === 0 ? (
-              <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">No ref clinics found.</td></tr>
+            ) : filteredRefClinics.length === 0 ? (
+              <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">No matching facilities or clinics found.</td></tr>
             ) : (
-              refClinics.map((clinic: any) => (
+              filteredRefClinics.map((clinic: any) => (
                 <tr key={clinic._id} className="border-b hover:bg-blue-100/60 transition-all">
                   <td className="px-6 py-4 text-gray-900 font-semibold group-hover:text-blue-700">{clinic.name?.toUpperCase()}</td>
                   <td className="px-6 py-4 text-gray-800">{clinic.address}</td>

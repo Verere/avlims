@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnect } from '../../../lib/mongodb';
 import Bill from '../../../models/Bill';
+import { writeAuditLog } from '@/lib/audit';
 
 export async function GET(req: NextRequest) {
   await dbConnect();
@@ -56,6 +57,14 @@ export async function POST(req: NextRequest) {
       }
     }
     const bill = await Bill.create(body);
+    await writeAuditLog(req, {
+      action: 'create',
+      entityType: 'Bill',
+      entityId: bill._id,
+      labId: body.labId,
+      branchId: body.branchId,
+      changes: { orderId: body.orderId, amount: body.amount, paid: body.paid, balance: body.balance },
+    });
     return NextResponse.json(bill, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });

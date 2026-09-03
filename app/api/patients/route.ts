@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Patient from "@/models/patient";
 import { createPatient, getPatients } from "@/services/patientService";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -70,9 +71,40 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    const previous = await Patient.findById(id).lean();
+    if (!previous) {
+      return Response.json({ error: "Patient not found" }, { status: 404 });
+    }
+
     const updated = await Patient.findByIdAndUpdate(id, updateDoc, { new: true });
     if (!updated) {
       return Response.json({ error: "Patient not found" }, { status: 404 });
+    }
+
+    const changedFields = Object.keys(updateDoc).reduce<Record<string, { before: unknown; after: unknown }>>(
+      (changes, field) => {
+        const before = (previous as unknown as Record<string, unknown>)[field];
+        const after = (updated as unknown as Record<string, unknown>)[field];
+        if (String(before ?? "") !== String(after ?? "")) {
+          changes[field] = { before, after };
+        }
+        return changes;
+      },
+      {}
+    );
+
+    if (Object.keys(changedFields).length > 0) {
+      await writeAuditLog(req, {
+        action: "update",
+        entityType: "Patient",
+        entityId: updated._id,
+        labId: updated.labId,
+        branchId: updated.branch,
+        changes: {
+          patientName: { before: previous.name, after: updated.name },
+          fields: changedFields,
+        },
+      });
     }
 
     return Response.json({ success: true, patient: updated });

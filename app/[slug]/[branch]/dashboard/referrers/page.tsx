@@ -87,6 +87,7 @@ export default function ReferrersTablePage() {
   const [error, setError] = useState<string | null>(null);
   const [editingReferrer, setEditingReferrer] = useState<ReferrerRow | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [editForm, setEditForm] = useState<EditReferrerForm>({
     name: "",
     address: "",
@@ -95,6 +96,16 @@ export default function ReferrersTablePage() {
     bank: "",
     account: "",
     refClinic: "",
+  });
+
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredReferrers = referrers.filter((referrer) => {
+    if (!normalizedSearchQuery) return true;
+    const clinicName = referrer.refClinicName || (
+      typeof referrer.refClinic === "object" ? referrer.refClinic?.name : referrer.refClinic
+    );
+    return [referrer.name, referrer.phone, referrer.email, referrer.address, referrer.bank, referrer.account, clinicName]
+      .some((value) => String(value ?? "").toLowerCase().includes(normalizedSearchQuery));
   });
 
   useEffect(() => {
@@ -201,7 +212,17 @@ export default function ReferrersTablePage() {
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <ToastContainer />
-      <h1 className="text-3xl font-bold text-gray-800 mb-4">Referrers</h1>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-3xl font-bold text-gray-800">Referrers</h1>
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search referrers"
+          aria-label="Search referrers"
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:w-64"
+        />
+      </div>
       <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-blue-50">
@@ -220,10 +241,10 @@ export default function ReferrersTablePage() {
               <tr><td colSpan={7} className="px-6 py-4 text-center text-gray-500">Loading...</td></tr>
             ) : error ? (
               <tr><td colSpan={7} className="px-6 py-4 text-center text-red-500">{error}</td></tr>
-            ) : referrers.length === 0 ? (
-              <tr><td colSpan={7} className="px-6 py-4 text-center text-gray-500">No referrers found.</td></tr>
+            ) : filteredReferrers.length === 0 ? (
+              <tr><td colSpan={7} className="px-6 py-4 text-center text-gray-500">No matching referrers found.</td></tr>
             ) : (
-              referrers.map((ref) => (
+              filteredReferrers.map((ref) => (
                 <tr key={ref._id} className="border-b hover:bg-blue-100/60 transition-all">
                   <td className="px-3 py-2 sm:px-6 sm:py-4 text-gray-900 font-semibold group-hover:text-blue-700 whitespace-nowrap">{ref.name?.toUpperCase()}</td>
                   <td className="px-3 py-2 sm:px-6 sm:py-4 text-gray-800 whitespace-nowrap">{ref.phone}</td>

@@ -65,6 +65,7 @@ function buildNavItems(slug: string, branch: string) {
   },
   
     { label: "Reports", icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0h6" /></svg>, href: `/${slug}/${branch}/dashboard/reports` },
+    { label: "Audit Trail", icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0h6" /></svg>, href: `/${slug}/${branch}/dashboard/audits` },
     { label: "Settings", icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 0V6m0 4v2m0 4v2m0 0h.01" /></svg>, href: `/${slug}/${branch}/dashboard/settings` },
 
   ];
@@ -149,6 +150,10 @@ export default function Sidebar({ collapsed, onToggle, slug, branch, lab, branch
             <div className="flex items-center">
               <Link
                 href={item.href}
+                onClick={item.label === "Settings" ? (event) => {
+                  event.preventDefault();
+                  window.location.assign(item.href);
+                } : undefined}
                 className={`flex items-center gap-3 px-4 py-2 rounded-lg font-medium transition-all group focus:outline-none focus:ring-2 focus:ring-blue-200 ${activeHref === item.href ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
                 tabIndex={0}
                 aria-current={activeHref === item.href ? 'page' : undefined}

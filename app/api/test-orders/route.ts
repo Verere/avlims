@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnect } from '../../../lib/mongodb';
 import Order from '../../../models/Order';
+import { writeAuditLog } from '@/lib/audit';
 
 function toAbbreviation(value: unknown) {
   const words = String(value || "")
@@ -27,6 +28,13 @@ export async function POST(req: NextRequest) {
       transId: `${toAbbreviation(labSlug)}-${toAbbreviation(branchSlug)}-${String(orderCount + 1).padStart(4, "0")}`,
     };
     const order = await Order.create(payload);
+    await writeAuditLog(req, {
+      action: 'create',
+      entityType: 'Order',
+      entityId: order._id,
+      changes: { transId: payload.transId, slug: labSlug, branch: branchSlug },
+      metadata: { labSlug, branchSlug },
+    });
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
     console.error('Error creating test order:', error);

@@ -67,6 +67,23 @@ export default function TestsTablePage() {
   const [editForm, setEditForm] = useState<any>(emptyEditForm);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredTests = tests.filter((test) => {
+    if (!normalizedSearchQuery) return true;
+    return [
+      test.name,
+      test.code,
+      test.category,
+      test.subCategory,
+      test.type,
+      test.resultType,
+      test.sampleType,
+      test.unit,
+      test.price,
+    ].some((value) => String(value ?? "").toLowerCase().includes(normalizedSearchQuery));
+  });
 
 
   useEffect(() => {
@@ -186,7 +203,17 @@ export default function TestsTablePage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <ToastContainer />
-      <h1 className="text-3xl font-bold text-gray-800 mb-4">Tests</h1>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-3xl font-bold text-gray-800">Tests</h1>
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search tests"
+          aria-label="Search tests"
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:w-64"
+        />
+      </div>
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         <table className="min-w-full">
           <thead className="bg-blue-50">
@@ -202,10 +229,10 @@ export default function TestsTablePage() {
               <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">Loading...</td></tr>
             ) : error ? (
               <tr><td colSpan={4} className="px-6 py-4 text-center text-red-500">{error}</td></tr>
-            ) : tests.length === 0 ? (
-              <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">No tests found.</td></tr>
+            ) : filteredTests.length === 0 ? (
+              <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">No matching tests found.</td></tr>
             ) : (
-              tests.map((test) => (
+              filteredTests.map((test) => (
                 <tr key={test.id} className="border-b group hover:bg-blue-100/60 transition-all">
                   <td className="px-6 py-4">
                     <div className="font-semibold text-gray-900 group-hover:text-blue-700">{test.name?.toUpperCase()}</div>

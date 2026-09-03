@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnect } from '../../../lib/mongodb';
 import Expense from '../../../models/Expense';
+import { writeAuditLog } from '@/lib/audit';
 
 export async function POST(req: NextRequest) {
   await dbConnect();
@@ -34,6 +35,15 @@ export async function POST(req: NextRequest) {
       user: body.user || undefined,
       note: body.note || undefined,
       isCancelled: false,
+    });
+
+    await writeAuditLog(req, {
+      action: 'create',
+      entityType: 'Expense',
+      entityId: expense._id,
+      labId: body.labId,
+      branchId: body.branchId,
+      changes: { amount, description: body.description, category: body.category || 'general' },
     });
 
     return NextResponse.json(expense, { status: 201 });

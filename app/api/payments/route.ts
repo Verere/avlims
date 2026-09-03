@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import Payment from '../../../models/Payment';
 import { dbConnect } from '../../../lib/mongodb';
+import { writeAuditLog } from '@/lib/audit';
 
 export async function GET(req: NextRequest) {
   await dbConnect();
@@ -54,6 +55,14 @@ export async function POST(req: NextRequest) {
       status: 'completed',
       transactionId: body.transactionId,
       isCancelled: body.isCancelled || false,
+    });
+    await writeAuditLog(req, {
+      action: 'create',
+      entityType: 'Payment',
+      entityId: payment._id,
+      labId: body.labId,
+      branchId: body.branchId,
+      changes: { orderId: body.orderId, payments: body.payments, status: 'completed' },
     });
     return NextResponse.json(payment, { status: 201 });
   } catch (error) {
