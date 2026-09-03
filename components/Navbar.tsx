@@ -10,7 +10,7 @@ const navLinks = [
   { href: "/", label: "Home" },
   { href: "/test-orders", label: "Test Orders" },
   { href: "/payments", label: "Payments" },
-  { href: "/results", label: "Results" },
+  { href: "/patients", label: "Patients" },
   { href: "/bills", label: "Pending Bills" },
   { href: "/expenses", label: "Expenses" },
   { href: "/login", label: "Logout" },

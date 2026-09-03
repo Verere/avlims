@@ -38,6 +38,7 @@ export default function TestOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [searchQuery, setSearchQuery] = useState("");
 
   const pathname = usePathname();
 
@@ -110,10 +111,26 @@ export default function TestOrdersPage() {
     if (pathname) fetchOrders();
   }, [pathname]);
 
-  const filteredOrders = useMemo(
-    () => orders.filter((order) => isSameDay(order.bDate || order.createdAt, selectedDate)),
-    [orders, selectedDate]
-  );
+  const filteredOrders = useMemo(() => {
+    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+    return orders.filter((order) => {
+      if (!isSameDay(order.bDate || order.createdAt, selectedDate)) return false;
+      if (!normalizedSearchQuery) return true;
+
+      const testNames = order.tests?.flatMap((test) => [test.name, test.panel?.name]) || [];
+      return [
+        order.transId,
+        order.name,
+        order.patientId,
+        order.referral,
+        order.user,
+        order.status,
+        order.amount,
+        order.discount,
+        ...testNames,
+      ].some((value) => String(value ?? "").toLowerCase().includes(normalizedSearchQuery));
+    });
+  }, [orders, searchQuery, selectedDate]);
 
   const totals = useMemo(
     () =>
@@ -245,7 +262,18 @@ export default function TestOrdersPage() {
                 <h1 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">Test Orders</h1>
                 <p className="mt-1 text-sm text-slate-600">View branch test orders by date.</p>
               </div>
-              <div className="flex items-end gap-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="flex flex-col text-sm font-medium text-slate-700">
+                  Search
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Patient, test, or ID"
+                    aria-label="Search test orders"
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2 sm:w-56"
+                  />
+                </label>
                 <label className="flex flex-col text-sm font-medium text-slate-700">
                   Date
                   <input
@@ -310,7 +338,7 @@ export default function TestOrdersPage() {
                   ) : filteredOrders.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
-                        No test orders found for the selected date.
+                        No matching test orders found for the selected date.
                       </td>
                     </tr>
                   ) : (
