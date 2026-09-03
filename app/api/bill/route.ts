@@ -8,6 +8,8 @@ export async function GET(req: NextRequest) {
   try {
     const branchId = req.nextUrl.searchParams.get('branchId');
     const date = req.nextUrl.searchParams.get('date');
+    const from = req.nextUrl.searchParams.get('from');
+    const to = req.nextUrl.searchParams.get('to');
 
     if (!branchId) {
       return NextResponse.json({ error: 'Missing required query: branchId' }, { status: 400 });
@@ -15,7 +17,20 @@ export async function GET(req: NextRequest) {
 
     const filter: any = { branchId };
 
-    if (date) {
+    if (from || to) {
+      const start = from ? new Date(`${from}T00:00:00.000Z`) : undefined;
+      const end = to ? new Date(`${to}T23:59:59.999Z`) : undefined;
+      if ((start && Number.isNaN(start.getTime())) || (end && Number.isNaN(end.getTime()))) {
+        return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, { status: 400 });
+      }
+      if (start && end && start > end) {
+        return NextResponse.json({ error: 'from date must be before or equal to to date' }, { status: 400 });
+      }
+      filter.businessDate = {
+        ...(start ? { $gte: start } : {}),
+        ...(end ? { $lte: end } : {}),
+      };
+    } else if (date) {
       const start = new Date(`${date}T00:00:00.000Z`);
       const end = new Date(`${date}T23:59:59.999Z`);
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {

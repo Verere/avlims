@@ -42,14 +42,51 @@ function formatDate(value?: string) {
   });
 }
 
+function formatLetterDate(value: Date) {
+  return value.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function numberToWords(value: number): string {
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const toWordsUnderThousand = (number: number): string => {
+    if (number < 20) return ones[number];
+    if (number < 100) return `${tens[Math.floor(number / 10)]}${number % 10 ? ` ${ones[number % 10]}` : ""}`;
+    return `${ones[Math.floor(number / 100)]} Hundred${number % 100 ? ` ${toWordsUnderThousand(number % 100)}` : ""}`;
+  };
+
+  const wholeNumber = Math.floor(Math.max(0, value));
+  if (wholeNumber === 0) return "Zero";
+  const groups = [
+    { divisor: 1_000_000_000, label: "Billion" },
+    { divisor: 1_000_000, label: "Million" },
+    { divisor: 1_000, label: "Thousand" },
+  ];
+  let remainder = wholeNumber;
+  const parts: string[] = [];
+  for (const group of groups) {
+    const groupValue = Math.floor(remainder / group.divisor);
+    if (groupValue) {
+      parts.push(`${toWordsUnderThousand(groupValue)} ${group.label}`);
+      remainder %= group.divisor;
+    }
+  }
+  if (remainder) parts.push(toWordsUnderThousand(remainder));
+  return parts.join(" ");
+}
+
 async function fetchBranchBySlug(branchSlug: string) {
   const res = await fetch(`/api/branches/${branchSlug}`);
   if (!res.ok) throw new Error("Branch not found");
   return res.json();
 }
 
-async function fetchBills(branchId: string, date: string) {
-  const query = new URLSearchParams({ branchId, date }).toString();
+async function fetchBills(branchId: string, from: string, to: string) {
+  const query = new URLSearchParams({ branchId, from, to }).toString();
   const res = await fetch(`/api/bill?${query}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Failed to fetch bills" }));
@@ -63,8 +100,10 @@ export default function DashboardBillingPage() {
   const pathParts = (pathname || "").split("/").filter(Boolean);
   const branchSlug = pathParts[1] || "";
 
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [fromDate, setFromDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [bills, setBills] = useState<BillRow[]>([]);
+  const [selectedBillIds, setSelectedBillIds] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -76,6 +115,7 @@ export default function DashboardBillingPage() {
   const [payNote, setPayNote] = useState<string>("");
   const [paying, setPaying] = useState<boolean>(false);
   const [paymentError, setPaymentError] = useState<string>("");
+  const [showBillLetter, setShowBillLetter] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -92,9 +132,10 @@ export default function DashboardBillingPage() {
       setError("");
       try {
         const branchDoc = await fetchBranchBySlug(branchSlug);
-        const data = await fetchBills(branchDoc._id, selectedDate);
+        const data = await fetchBills(branchDoc._id, fromDate, toDate);
         if (!isMounted) return;
         setBills(Array.isArray(data) ? data : []);
+        setSelectedBillIds([]);
       } catch (e: any) {
         if (!isMounted) return;
         setError(e?.message || "Failed to fetch bills");
@@ -109,7 +150,7 @@ export default function DashboardBillingPage() {
     return () => {
       isMounted = false;
     };
-  }, [branchSlug, selectedDate]);
+  }, [branchSlug, fromDate, toDate]);
 
   const filteredBills = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -133,6 +174,31 @@ export default function DashboardBillingPage() {
       { amount: 0, paid: 0, balance: 0 }
     );
   }, [filteredBills]);
+
+  const allVisibleBillsSelected = filteredBills.length > 0 && filteredBills.every((bill) => selectedBillIds.includes(bill._id));
+
+  const toggleBillSelection = (billId: string) => {
+    setSelectedBillIds((current) => current.includes(billId)
+      ? current.filter((id) => id !== billId)
+      : [...current, billId]
+    );
+  };
+
+  const toggleVisibleBills = () => {
+    const visibleBillIds = filteredBills.map((bill) => bill._id);
+    setSelectedBillIds((current) => allVisibleBillsSelected
+      ? current.filter((id) => !visibleBillIds.includes(id))
+      : Array.from(new Set([...current, ...visibleBillIds]))
+    );
+  };
+
+  const selectedBills = bills.filter((bill) => selectedBillIds.includes(bill._id));
+  const selectedBillToRecipients = Array.from(new Set(selectedBills.map((bill) => bill.billToName || bill.billTo).filter(Boolean)));
+  const selectedBillsTotal = selectedBills.reduce((total, bill) => total + Number(bill.balance ?? bill.amount ?? 0), 0);
+  const canGenerateBillLetter = selectedBills.length > 0 && selectedBillToRecipients.length === 1;
+  const periodLabel = fromDate === toDate
+    ? formatDate(fromDate)
+    : `${formatDate(fromDate)} to ${formatDate(toDate)}`;
 
   const openPaymentModal = (bill: BillRow) => {
     setActiveBill(bill);
@@ -228,7 +294,7 @@ export default function DashboardBillingPage() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Billing</p>
               <h1 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">Branch Bills</h1>
-              <p className="mt-1 text-sm text-slate-600">View all bills for this branch by date.</p>
+              <p className="mt-1 text-sm text-slate-600">View all bills for this branch by date range.</p>
             </div>
  <div className="mb-3">
           <input
@@ -241,17 +307,32 @@ export default function DashboardBillingPage() {
         </div>
             <div className="flex flex-wrap items-end gap-2">
               <label className="flex flex-col text-sm font-medium text-slate-700">
-                Date
+                From
                 <input
                   type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  value={fromDate}
+                  max={toDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
+                />
+              </label>
+              <label className="flex flex-col text-sm font-medium text-slate-700">
+                To
+                <input
+                  type="date"
+                  value={toDate}
+                  min={fromDate}
+                  onChange={(e) => setToDate(e.target.value)}
                   className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
                 />
               </label>
               <button
                 type="button"
-                onClick={() => setSelectedDate(new Date().toISOString().slice(0, 10))}
+                onClick={() => {
+                  const today = new Date().toISOString().slice(0, 10);
+                  setFromDate(today);
+                  setToDate(today);
+                }}
                 className="h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Today
@@ -273,6 +354,19 @@ export default function DashboardBillingPage() {
               <p className="mt-1 text-lg font-bold text-amber-900">{formatCurrency(totals.balance)}</p>
             </div>
           </div>
+          <div className="mt-4 flex flex-col gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-600">{selectedBills.length} bill{selectedBills.length === 1 ? "" : "s"} selected</p>
+            <button
+              type="button"
+              disabled={!canGenerateBillLetter}
+              onClick={() => setShowBillLetter(true)}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              title={selectedBills.length === 0 ? "Select one or more bills first" : selectedBillToRecipients.length > 1 ? "Select bills for one bill-to recipient at a time" : "Generate selected bills letter"}
+            >
+              Send Bills
+            </button>
+          </div>
+          {selectedBills.length > 0 && selectedBillToRecipients.length > 1 ? <p className="mt-2 text-sm text-amber-700">Select bills for one bill-to recipient at a time.</p> : null}
         </div>
 
        
@@ -282,6 +376,15 @@ export default function DashboardBillingPage() {
             <table className="min-w-full text-sm">
               <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
                 <tr>
+                  <th className="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleBillsSelected}
+                      onChange={toggleVisibleBills}
+                      aria-label="Select all visible bills"
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Transaction ID</th>
                   <th className="px-4 py-3 text-left">Patient</th>
@@ -296,25 +399,34 @@ export default function DashboardBillingPage() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
                       Loading bills...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-red-600">
+                    <td colSpan={10} className="px-4 py-10 text-center text-red-600">
                       {error}
                     </td>
                   </tr>
                 ) : filteredBills.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
-                      {searchQuery.trim() ? "No bills match your search." : "No bills found for the selected date."}
+                    <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
+                      {searchQuery.trim() ? "No bills match your search." : "No bills found for the selected date range."}
                     </td>
                   </tr>
                 ) : (
                   filteredBills.map((bill) => (
                     <tr key={bill._id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedBillIds.includes(bill._id)}
+                          onChange={() => toggleBillSelection(bill._id)}
+                          aria-label={`Select bill ${bill.transId || bill._id}`}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-700">{formatDate(bill.businessDate)}</td>
                       <td className="whitespace-nowrap px-4 py-3 font-mono text-slate-700">{bill.transId || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">{bill.patient || "-"}</td>
@@ -441,6 +553,35 @@ export default function DashboardBillingPage() {
             </div>
           </div>
         )}
+
+        {showBillLetter && canGenerateBillLetter ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setShowBillLetter(false)}>
+            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected Bills</p>
+                  <h2 className="text-xl font-bold text-slate-900">Bill Letter</h2>
+                </div>
+                <button type="button" onClick={() => setShowBillLetter(false)} className="text-sm font-semibold text-slate-600 hover:text-slate-900">Close</button>
+              </div>
+              <article className="space-y-5 border border-slate-200 p-6 text-sm leading-7 text-slate-800">
+                <p>{formatLetterDate(new Date())}</p>
+                <div><p>The Manager,</p><p>{selectedBillToRecipients[0]},</p><p>Ughelli,</p><p>Delta State.</p></div>
+                <p>Sir,</p>
+                <p className="font-bold uppercase">Bill for medical investigations done for your clients from {periodLabel}</p>
+                <p>Please find the medical investigation bill of your clients done in <strong>RESONANCE MEDICAL DIAGNOSTICS LTD, UGHELLI</strong> from {periodLabel}.</p>
+                <p>The total cost of the investigations is <strong>{numberToWords(selectedBillsTotal)} Naira only ({formatCurrency(selectedBillsTotal)})</strong>.</p>
+                <p>We will be grateful if the money is paid to us in cash or into our account.</p>
+                <p><strong>Account details: UNION BANK, RESONANCE DIAGNOSTICS LTD; 0217252732</strong></p>
+                <p>Kind regards.</p>
+                <div><p>Abugu, Jude Ogechukwu</p><p>For Management</p><p>08069999425</p></div>
+              </article>
+              <div className="mt-5 flex justify-end">
+                <button type="button" onClick={() => window.print()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Print Letter</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );
