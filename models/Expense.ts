@@ -4,6 +4,7 @@ export interface IExpense extends Document {
   labId: Types.ObjectId;
   branchId: Types.ObjectId;
   amount: number;
+  paymentMethod: 'cash' | 'transfer' | 'pos' | 'other';
   description: string;
   category?: string;
   businessDate: Date;
@@ -19,6 +20,7 @@ const ExpenseSchema = new Schema<IExpense>(
     labId: { type: Schema.Types.ObjectId, ref: 'Lab', required: true },
     branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
     amount: { type: Number, required: true, min: 0 },
+    paymentMethod: { type: String, enum: ['cash', 'transfer', 'pos', 'other'], default: 'cash' },
     description: { type: String, required: true, trim: true },
     category: { type: String, default: 'general' },
     businessDate: { type: Date, required: true },

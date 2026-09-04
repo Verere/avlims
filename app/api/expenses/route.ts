@@ -20,6 +20,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'amount must be a valid number >= 0' }, { status: 400 });
     }
 
+    const paymentMethod = String(body.paymentMethod || 'cash').toLowerCase();
+    if (!['cash', 'transfer', 'pos', 'other'].includes(paymentMethod)) {
+      return NextResponse.json({ error: 'paymentMethod must be cash, transfer, pos, or other' }, { status: 400 });
+    }
+
     const businessDate = body.businessDate ? new Date(body.businessDate) : new Date();
     if (Number.isNaN(businessDate.getTime())) {
       return NextResponse.json({ error: 'Invalid businessDate' }, { status: 400 });
@@ -29,6 +34,7 @@ export async function POST(req: NextRequest) {
       labId: body.labId,
       branchId: body.branchId,
       amount,
+      paymentMethod,
       description: body.description,
       category: body.category || 'general',
       businessDate,
@@ -43,7 +49,7 @@ export async function POST(req: NextRequest) {
       entityId: expense._id,
       labId: body.labId,
       branchId: body.branchId,
-      changes: { amount, description: body.description, category: body.category || 'general' },
+      changes: { amount, paymentMethod, description: body.description, category: body.category || 'general' },
     });
 
     return NextResponse.json(expense, { status: 201 });

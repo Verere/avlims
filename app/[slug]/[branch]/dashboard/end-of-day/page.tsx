@@ -38,6 +38,7 @@ type OrderRow = {
 type ExpensesResponse = {
   totalExpenses?: number;
   count?: number;
+  expenses?: Array<{ amount?: number; paymentMethod?: string }>;
 };
 
 function formatCurrency(value: number) {
@@ -214,6 +215,13 @@ export default function EndOfDayPage() {
     );
 
     const totalExpenses = Number(expenses?.totalExpenses || 0);
+    const cashExpenses = (expenses?.expenses || []).reduce((total, expense) =>
+      String(expense.paymentMethod || "").toLowerCase() === "cash"
+        ? total + Number(expense.amount || 0)
+        : total,
+      0
+    );
+    const cashAtHand = paymentMethodTotals.cash + billPaymentMethodTotals.cash - cashExpenses;
 
     return {
       totalPayment,
@@ -221,6 +229,8 @@ export default function EndOfDayPage() {
       totalCredit,
       totalRevenue,
       totalExpenses,
+      cashExpenses,
+      cashAtHand,
       cash: paymentMethodTotals.cash,
       pos: paymentMethodTotals.pos,
       transfer: paymentMethodTotals.transfer,
@@ -287,7 +297,7 @@ export default function EndOfDayPage() {
 
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Cash</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cash Payments</p>
             <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(totals.cash)}</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -297,6 +307,18 @@ export default function EndOfDayPage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Transfer</p>
             <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(totals.transfer)}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Cash Expenses</p>
+            <p className="mt-1 text-lg font-bold text-rose-900">{formatCurrency(totals.cashExpenses)}</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Cash At Hand</p>
+            <p className="mt-1 text-xl font-bold text-emerald-900">{formatCurrency(totals.cashAtHand)}</p>
+            <p className="mt-1 text-xs text-emerald-700">Cash payments plus bill-payment cash, less cash expenses.</p>
           </div>
         </div>
 

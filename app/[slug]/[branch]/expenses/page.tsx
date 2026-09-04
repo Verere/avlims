@@ -7,6 +7,7 @@ import Navbar from "@/components/Navbar";
 type ExpenseRow = {
   _id: string;
   amount: number;
+  paymentMethod?: string;
   description: string;
   category?: string;
   businessDate?: string;
@@ -53,6 +54,7 @@ export default function ExpensesPage() {
 
   const [form, setForm] = useState({
     amount: "",
+    paymentMethod: "cash",
     description: "",
     category: "general",
     businessDate: new Date().toISOString().slice(0, 10),
@@ -156,6 +158,7 @@ export default function ExpensesPage() {
           labId,
           branchId,
           amount,
+          paymentMethod: form.paymentMethod,
           description: form.description,
           category: form.category,
           businessDate: new Date(`${form.businessDate}T00:00:00.000Z`).toISOString(),
@@ -178,6 +181,7 @@ export default function ExpensesPage() {
         setExpenses(list);
         setForm({
           amount: "",
+          paymentMethod: "cash",
           description: "",
           category: "general",
           businessDate: new Date().toISOString().slice(0, 10),
@@ -271,6 +275,21 @@ export default function ExpensesPage() {
               </select>
             </div>
 
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-slate-700">Payment Method</label>
+              <select
+                name="paymentMethod"
+                value={form.paymentMethod}
+                onChange={handleChange}
+                className="rounded-lg border border-slate-300 px-3 py-2 outline-none ring-blue-500 focus:ring-2"
+              >
+                <option value="cash">Cash</option>
+                <option value="transfer">Transfer</option>
+                <option value="pos">POS</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
             <div className="flex flex-col gap-2 sm:col-span-2">
               <label className="text-sm font-medium text-slate-700">Description</label>
               <input
@@ -341,6 +360,7 @@ export default function ExpensesPage() {
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Description</th>
                   <th className="px-4 py-3 text-left">Category</th>
+                  <th className="px-4 py-3 text-left">Method</th>
                   <th className="px-4 py-3 text-left">User</th>
                   <th className="px-4 py-3 text-right">Amount</th>
                 </tr>
@@ -348,15 +368,15 @@ export default function ExpensesPage() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-slate-500">Loading expenses...</td>
+                    <td colSpan={6} className="px-4 py-10 text-center text-slate-500">Loading expenses...</td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-red-600">{error}</td>
+                    <td colSpan={6} className="px-4 py-10 text-center text-red-600">{error}</td>
                   </tr>
                 ) : expenses.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-slate-500">No expenses found for selected date.</td>
+                    <td colSpan={6} className="px-4 py-10 text-center text-slate-500">No expenses found for selected date.</td>
                   </tr>
                 ) : (
                   expenses.map((row) => (
@@ -367,6 +387,7 @@ export default function ExpensesPage() {
                         {row.note ? <div className="text-xs text-slate-500">{row.note}</div> : null}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-700">{row.category || "-"}</td>
+                      <td className="whitespace-nowrap px-4 py-3 capitalize text-slate-700">{row.paymentMethod || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-700">{row.user || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.amount)}</td>
                     </tr>
