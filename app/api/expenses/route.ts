@@ -100,3 +100,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  await dbConnect();
+  try {
+    const body = await req.json();
+    const id = String(body?.id || "").trim();
+    if (!id) {
+      return NextResponse.json({ error: "Expense id is required" }, { status: 400 });
+    }
+
+    const expense = await Expense.findByIdAndUpdate(id, { isCancelled: true }, { new: true });
+    if (!expense) {
+      return NextResponse.json({ error: "Expense not found" }, { status: 404 });
+    }
+
+    await writeAuditLog(req, {
+      action: "delete",
+      entityType: "Expense",
+      entityId: expense._id,
+      labId: expense.labId,
+      branchId: expense.branchId,
+      changes: { description: expense.description, amount: expense.amount, isCancelled: true },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message || "Failed to delete expense" }, { status: 500 });
+  }
+}

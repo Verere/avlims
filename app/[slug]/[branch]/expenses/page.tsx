@@ -64,6 +64,7 @@ export default function ExpensesPage() {
   const [saving, startTransition] = useTransition();
   const [formError, setFormError] = useState("");
   const [success, setSuccess] = useState("");
+  const [deletingId, setDeletingId] = useState("");
 
   const loadExpenses = async (resolvedBranchId: string, resolvedLabId: string, dateYmd: string) => {
     const query = new URLSearchParams({ branchId: resolvedBranchId, labId: resolvedLabId, date: dateYmd }).toString();
@@ -193,6 +194,28 @@ export default function ExpensesPage() {
         setFormError(err?.message || "Failed to save expense");
       }
     });
+  };
+
+  const handleDelete = async (expense: ExpenseRow) => {
+    if (!window.confirm(`Delete expense: ${expense.description}?`)) return;
+
+    setDeletingId(expense._id);
+    setError("");
+    try {
+      const response = await fetch("/api/expenses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: expense._id }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.error || "Failed to delete expense");
+      setExpenses((current) => current.filter((row) => row._id !== expense._id));
+      setSuccess("Expense deleted successfully.");
+    } catch (deleteError: any) {
+      setError(deleteError?.message || "Failed to delete expense");
+    } finally {
+      setDeletingId("");
+    }
   };
 
   return (
@@ -363,20 +386,21 @@ export default function ExpensesPage() {
                   <th className="px-4 py-3 text-left">Method</th>
                   <th className="px-4 py-3 text-left">User</th>
                   <th className="px-4 py-3 text-right">Amount</th>
+                  <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-slate-500">Loading expenses...</td>
+                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">Loading expenses...</td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-red-600">{error}</td>
+                    <td colSpan={7} className="px-4 py-10 text-center text-red-600">{error}</td>
                   </tr>
                 ) : expenses.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-slate-500">No expenses found for selected date.</td>
+                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">No expenses found for selected date.</td>
                   </tr>
                 ) : (
                   expenses.map((row) => (
@@ -390,6 +414,16 @@ export default function ExpensesPage() {
                       <td className="whitespace-nowrap px-4 py-3 capitalize text-slate-700">{row.paymentMethod || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-700">{row.user || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(row.amount)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(row)}
+                          disabled={deletingId === row._id}
+                          className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        >
+                          {deletingId === row._id ? "Deleting..." : "Delete"}
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
