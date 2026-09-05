@@ -16,6 +16,7 @@ export default async function AuditTrailPage({
 }) {
   const { slug, branch } = await params;
   const memberships = await getUserLabMemberships();
+  
   const branchMemberships = memberships.filter(
     (membership: any) =>
       membership.slug === slug && toRouteSegment(membership.branch) === branch
@@ -24,7 +25,9 @@ export default async function AuditTrailPage({
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
       <div className="mx-auto w-full max-w-5xl">
-        <AuditLogPanel memberships={branchMemberships} />
+        <p>Audit Trail</p>
+      <AuditLogPanel memberships={branchMemberships} />
+
       </div>
     </div>
   );

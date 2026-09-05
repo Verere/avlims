@@ -8,11 +8,12 @@ import { useTheme } from "./ThemeProvider";
 
 const navLinks = [
   { href: "/", label: "Home" },
-  { href: "/test-orders", label: "Test Orders" },
+  { href: "/test-orders", label: "Orders" },
   { href: "/payments", label: "Payments" },
   { href: "/patients", label: "Patients" },
-  { href: "/bills", label: "Pending Bills" },
+  { href: "/bills", label: "Bills" },
   { href: "/expenses", label: "Expenses" },
+  { href: "/eod", label: "EOD" },
   { href: "/login", label: "Logout" },
 ];
 

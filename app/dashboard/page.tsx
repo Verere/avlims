@@ -65,7 +65,6 @@ export default async function Dashboard() {
       </div>
       {/* Lab Memberships Card Section */}
       <LabMembershipsSection memberships={memberships} />
-      <AuditLogPanel memberships={memberships} />
     </div>
   );
 }
