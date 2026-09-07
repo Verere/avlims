@@ -59,6 +59,16 @@ type PatientRow = {
   email?: string;
   address?: string;
 };
+type TestOrder = {
+  _id: string;
+  transId?: string;
+  tests?: Array<{ name?: string; quantity?: number; panel?: { name?: string } }>;
+  amount?: number;
+  bal?: number;
+  status?: string;
+  bDate?: string;
+  createdAt?: string;
+};
 
 export default function PatientsPage() {
   const pathname = usePathname();
@@ -73,6 +83,12 @@ export default function PatientsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState<any>(emptyEditForm);
   const [searchQuery, setSearchQuery] = useState("");
+  const [branchId, setBranchId] = useState("");
+ 
+  const [historyPatient, setHistoryPatient] = useState<PatientRow | null>(null);
+  const [patientOrders, setPatientOrders] = useState<TestOrder[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredPatients = patients.filter((patient) => {
@@ -88,6 +104,7 @@ export default function PatientsPage() {
       try {
         const branchDoc = await fetchBranchBySlug(branch);
         if (!branchDoc || !branchDoc._id) throw new Error("Branch not found");
+        setBranchId(String(branchDoc._id));
         const data = await fetchPatientsByBranchId(branchDoc._id);
         console.log('Fetched patients:', data);
         setPatients(data);
@@ -187,6 +204,49 @@ export default function PatientsPage() {
     }
   };
 
+  //  const openHistoryDialog = async (patient: PatientRow) => {
+   
+  //   setHistoryPatient(patient);
+  //   setPatientOrders([]);
+  //   setHistoryError("");
+  //   setHistoryLoading(true);
+  //   try {
+  //     const response = await fetch(`/api/test-orders?branchId=${encodeURIComponent(branchId)}&patientId=${encodeURIComponent(patient.id)}`);
+  //     if (!response.ok) {
+  //       const payload = await response.json().catch(() => ({ error: "Unable to load patient history" }));
+  //       throw new Error(payload.error || "Unable to load patient history");
+  //     }
+  //     const data = await response.json();
+  //     setPatientOrders(Array.isArray(data) ? data : []);
+  //   } catch (historyLoadError: any) {
+  //     setHistoryError(historyLoadError?.message || "Unable to load patient history");
+  //   } finally {
+  //     setHistoryLoading(false);
+  //   }
+  // };
+
+  // const exportPatientHistory = () => {
+  //   if (!historyPatient || patientOrders.length === 0) return;
+  //   const escapeCsv = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  //   const rows = patientOrders.map((order) => [
+  //     formatDate(order.bDate || order.createdAt),
+  //     order.transId || order._id,
+  //     (order.tests || []).map((test) => test.panel?.name || `${test.name || "Test"}${test.quantity ? ` x${test.quantity}` : ""}`).join(", "),
+  //     order.status || "-",
+  //     Number(order.amount || 0).toFixed(2),
+  //     Number(order.bal || 0).toFixed(2),
+  //   ]);
+  //   const csv = [["Date", "Transaction ID", "Tests", "Status", "Amount", "Balance"], ...rows]
+  //     .map((row) => row.map(escapeCsv).join(","))
+  //     .join("\r\n");
+  //   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  //   const link = document.createElement("a");
+  //   link.href = url;
+  //   link.download = `${historyPatient.name.trim().replace(/[^a-z0-9]+/gi, "-").replace(/(^-|-$)/g, "").toLowerCase() || "patient"}-test-order-history.csv`;
+  //   link.click();
+  //   URL.revokeObjectURL(url);
+  // };
+
   return (
     <div className="p-4 max-w-4xl mx-auto w-full">
       <ToastContainer />
@@ -262,6 +322,9 @@ export default function PatientsPage() {
                       </svg>
                       Delete
                     </button>
+                    {/* <button type="button" onClick={() => openHistoryDialog(patient)} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                          View History
+                        </button> */}
                   </td>
                 </tr>
               ))
@@ -373,6 +436,33 @@ export default function PatientsPage() {
           </div>
         </div>
       ) : null}
+       {/* {historyPatient ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onClick={() => setHistoryPatient(null)}>
+          <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Patient History</p>
+                <h2 className="mt-1 text-xl font-bold text-slate-900">{historyPatient.name}</h2>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={exportPatientHistory} disabled={historyLoading || patientOrders.length === 0} className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300">Export CSV</button>
+                <button type="button" onClick={() => setHistoryPatient(null)} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Close</button>
+              </div>
+            </div>
+            {historyError ? <p className="mb-4 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{historyError}</p> : null}
+            <div className="overflow-x-auto border border-slate-200">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Transaction ID</th><th className="px-4 py-3">Tests</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Amount</th><th className="px-4 py-3 text-right">Balance</th></tr></thead>
+                <tbody className="divide-y divide-slate-100">
+                  {historyLoading ? <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500">Loading test-order history...</td></tr> : null}
+                  {!historyLoading && !historyError && patientOrders.length === 0 ? <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500">No test orders found for this patient.</td></tr> : null}
+                  {!historyLoading && patientOrders.map((order) => <tr key={order._id} className="hover:bg-slate-50"><td className="whitespace-nowrap px-4 py-3 text-slate-700">{formatDate(order.bDate || order.createdAt)}</td><td className="whitespace-nowrap px-4 py-3 font-mono text-slate-700">{order.transId || "-"}</td><td className="px-4 py-3 text-slate-700">{(order.tests || []).map((test) => test.panel?.name || `${test.name || "Test"}${test.quantity ? ` x${test.quantity}` : ""}`).join(", ") || "-"}</td><td className="px-4 py-3 capitalize text-slate-700">{order.status || "-"}</td><td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(order.amount)}</td><td className="whitespace-nowrap px-4 py-3 text-right text-slate-700">{formatCurrency(order.bal)}</td></tr>)}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      ) : null} */}
     </div>
   );
 }

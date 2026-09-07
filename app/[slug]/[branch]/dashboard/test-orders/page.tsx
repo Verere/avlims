@@ -10,6 +10,7 @@ interface TestOrder {
   patientId: string;
   name: string;
   amount: number;
+  bal:number;
   status: string;
   isCancelled?: boolean;
   createdAt: string;
@@ -252,6 +253,7 @@ export default function DashboardTestOrdersPage() {
                   <th className="px-4 py-3 text-left">User</th>
                   <th className="px-4 py-3 text-right">Amount</th>
                   <th className="px-4 py-3 text-right">Discount</th>
+                  <th className="px-4 py-3 text-right">Balance</th>
                   <th className="px-4 py-3 text-left">Actions</th>
                 </tr>
               </thead>
@@ -291,6 +293,9 @@ export default function DashboardTestOrdersPage() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-amber-700">
                           {formatCurrency(Number(order.discount || 0))}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-amber-700">
+                          {formatCurrency(Number(order.bal || 0))}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm">
                           <Link href={`./${order._id}`} className="font-medium text-blue-700 hover:underline">

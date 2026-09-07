@@ -48,12 +48,16 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const branch = url.searchParams.get('branch');
     const branchId = url.searchParams.get('branchId');
+    const patientId = url.searchParams.get('patientId');
     const includeCancelled = url.searchParams.get('includeCancelled') === 'true';
     let query: any = {};
     if (branchId) {
       query.branchId = branchId;
     } else if (branch) {
       query.branch = branch;
+    }
+    if (patientId) {
+      query.patientId = patientId;
     }
     if (!includeCancelled) {
       query.isCancelled = { $ne: true };

@@ -44,13 +44,13 @@ export default function Layout({ children, params }: { children: React.ReactNode
          
           <div className="flex items-center gap-4">
             <div className="relative hidden sm:block">
-              <input
+              {/* <input
                 type="text"
                 placeholder="Search..."
                 className="rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 bg-gray-50"
                 aria-label="Search"
               />
-              <svg className="absolute right-2 top-2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <svg className="absolute right-2 top-2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg> */}
             </div>
             <button
               type="button"

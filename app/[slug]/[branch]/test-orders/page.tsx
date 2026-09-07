@@ -319,6 +319,7 @@ export default function TestOrdersPage() {
                     <th className="px-4 py-3 text-left">User</th>
                     <th className="px-4 py-3 text-right">Amount</th>
                     <th className="px-4 py-3 text-right">Discount</th>
+                    <th className="px-4 py-3 text-right">Balance</th>
                     <th className="px-4 py-3 text-left">Actions</th>
                   </tr>
                 </thead>
@@ -360,6 +361,9 @@ export default function TestOrdersPage() {
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-amber-700">
                             {formatCurrency(Number(order.discount || 0))}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-amber-700">
+                            {formatCurrency(Number(order.bal || 0))}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-sm">
                             <div className="flex items-center gap-3">
