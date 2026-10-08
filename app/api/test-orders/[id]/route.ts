@@ -39,10 +39,14 @@ export async function PATCH(
 
     if (typeof body.referral === "string") {
       update.referral = body.referral.trim();
+    } else if (typeof body.referrer === "string") {
+      update.referral = body.referrer.trim();
     }
 
     if (typeof body.referralId === "string") {
       update.referralId = body.referralId;
+    } else if (typeof body.referrerId === "string") {
+      update.referralId = body.referrerId;
     }
 
     if (body.cancelOrder === true) {
@@ -90,7 +94,7 @@ export async function PATCH(
             ),
             ReferralLedger.updateMany(
               { testOrder: { $in: orderIdMatchers } },
-              { $set: { isCancelled: true } },
+              { $set: { isCancelled: true, status: 'cancelled' } },
               { session }
             ),
           ]);
@@ -131,6 +135,11 @@ export async function PATCH(
       );
     }
 
+    const existingOrder = await Order.findById(id).lean();
+    if (!existingOrder) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
     const updated = await Order.findByIdAndUpdate(id, update, {
       new: true,
       runValidators: true,
@@ -140,7 +149,28 @@ export async function PATCH(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, order: updated }, { status: 200 });
+    const nextReferrerId =
+      typeof update.referralId === "string" && update.referralId.trim().length > 0
+        ? update.referralId
+        : typeof existingOrder.referralId === "string" && existingOrder.referralId.trim().length > 0
+          ? existingOrder.referralId
+          : null;
+
+    let referralLedgerCount = 0;
+    if (nextReferrerId && mongoose.Types.ObjectId.isValid(nextReferrerId)) {
+      const orderObjectId = new mongoose.Types.ObjectId(id);
+      const ledgerResult = await ReferralLedger.updateMany(
+        { testOrder: orderObjectId },
+        { $set: { referrer: nextReferrerId } }
+      );
+      referralLedgerCount = ledgerResult.modifiedCount || 0;
+    }
+
+    return NextResponse.json({
+      success: true,
+      order: updated,
+      referralLedgerUpdated: referralLedgerCount,
+    }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: "Failed to update order" }, { status: 500 });
   }

@@ -19,6 +19,7 @@ import Navbar from "@/components/Navbar";
 import FacilitySelector from "@/components/FacilitySelector";
 import ReferrerForm from "@/components/ReferrerForm/ReferrerForm";
 import RefClinicForm from "@/components/RefClinicForm/RefClinicForm";
+import { getReferralBonusAmountForItem, type ReferralBonusPolicy } from "@/lib/referralBonus";
 
 
 
@@ -64,9 +65,7 @@ export default function LaboratoryRegistrationPage() {
   const [loading, startTransition] = useTransition();
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-
-
-	// Discount state
+  const [branchBonusPolicy, setBranchBonusPolicy] = useState<ReferralBonusPolicy>({ defaultPercentage: 0, exceptions: [] });
 	const [discountEnabled, setDiscountEnabled] = useState(false);
 	const [discountMode, setDiscountMode] = useState<DiscountMode>("percent");
 	const [discountValue, setDiscountValue] = useState(0);
@@ -149,6 +148,35 @@ export default function LaboratoryRegistrationPage() {
 	}, [cartReferrer.referrer?.id, referrer.id]);
 
 	useEffect(() => {
+		async function loadBranchBonusPolicy() {
+			const slug = pathname?.split("/").filter(Boolean)[1];
+			if (!slug) return;
+			try {
+				const res = await fetch(`/api/branches/${slug}`);
+				if (!res.ok) return;
+				const branch = await res.json();
+				setBranchBonusPolicy({
+					defaultPercentage: Number(branch?.referralBonusPolicy?.defaultPercentage ?? 0),
+					exceptions: Array.isArray(branch?.referralBonusPolicy?.exceptions)
+						? branch.referralBonusPolicy.exceptions.map((entry: any) => ({
+							type: entry?.type === "panel" ? "panel" : "test",
+							testId: entry?.testId || undefined,
+							testName: entry?.testName || undefined,
+							panelId: entry?.panelId || undefined,
+							panelName: entry?.panelName || undefined,
+							percentage: Number(entry?.percentage ?? 0),
+						}))
+						: [],
+				});
+			} catch {
+				setBranchBonusPolicy({ defaultPercentage: 0, exceptions: [] });
+			}
+		}
+
+		loadBranchBonusPolicy();
+	}, [pathname]);
+
+	useEffect(() => {
 		const effectiveReferrerId = (cartReferrer.referrer?.id || referrer.id || "").toLowerCase();
 		const hasReferrerBonus = effectiveReferrerId !== "walkin";
 		const next: Record<string, number> = {};
@@ -159,18 +187,18 @@ export default function LaboratoryRegistrationPage() {
 				const key = `panel:${item.panel.id}`;
 				if (seenPanels.has(key)) continue;
 				seenPanels.add(key);
-				const base = Math.round(Number(item.panel.price || 0) * 0.1);
+				const base = getReferralBonusAmountForItem({ panel: item.panel, quantity: 1 }, branchBonusPolicy);
 				next[key] = hasReferrerBonus ? (itemBonuses[key] ?? base) : 0;
 				continue;
 			}
 
 			const key = `test:${item.test.id}`;
-			const base = Math.round(Number(item.test.price || 0) * Number(item.quantity || 1) * 0.1);
+			const base = getReferralBonusAmountForItem({ test: item.test, quantity: item.quantity }, branchBonusPolicy);
 			next[key] = hasReferrerBonus ? (itemBonuses[key] ?? base) : 0;
 		}
 
 		setItemBonuses(next);
-	}, [cart, cartReferrer.referrer?.id, referrer.id]);
+	}, [cart, cartReferrer.referrer?.id, referrer.id, branchBonusPolicy]);
 
 	const handleItemBonusChange = (itemKey: string, value: number) => {
 		setItemBonuses((prev) => ({
@@ -228,6 +256,7 @@ export default function LaboratoryRegistrationPage() {
 		payload: {
 		transactionId: string;
 		patientName: string;
+		gender?: string;
 		branchName: string;
 		branchPhone: string;
 		labName: string;
@@ -309,6 +338,7 @@ export default function LaboratoryRegistrationPage() {
 
 					<div class="details">
 						<div class="detail"><span class="detail-label">Patient</span><span class="detail-value">${escapeHtml(payload.patientName || "-")}</span></div>
+						${payload.gender ? `<div class="detail"><span class="detail-label">Gender</span><span class="detail-value">${escapeHtml(payload.gender)}</span></div>` : ""}
 						${payload.billTo ? `<div class="detail"><span class="detail-label">Bill To</span><span class="detail-value">${escapeHtml(payload.billTo)}</span></div>` : ""}
 						<div class="detail"><span class="detail-label">Reference</span><span class="detail-value">${escapeHtml(payload.transactionId || "-")}</span></div>
 						<div class="detail"><span class="detail-label">Issued</span><span class="detail-value">${escapeHtml(new Date(payload.date).toLocaleString())}</span></div>
@@ -445,6 +475,7 @@ export default function LaboratoryRegistrationPage() {
 			// 4. Prepare order payload
 			const orderPayload = {
 				patientId: selectedPatient.id,
+				gender: selectedPatient.gender,
 				name: selectedPatient.name,
 				tests: cart.map(item => ({
 					id: item.test.id,
@@ -544,6 +575,7 @@ export default function LaboratoryRegistrationPage() {
 			printReceipt({
 				transactionId: String(orderData.transId || paymentData?.transactionId || "-"),
 				patientName: selectedPatient.name,
+				gender: selectedPatient.gender,
 				branchName: String(pathname.split("/")[2] || "-"),
 				branchPhone: String(branchDoc?.phone || "-"),
 				labName: String(labDoc?.name || "Laboratory"),
@@ -559,8 +591,9 @@ export default function LaboratoryRegistrationPage() {
 				balanceAmount: balance,
 			}, receiptWindow);
 
-			// 8. Send referral ledger entry only if referrer is not 'Walk-in'
-			if (cartReferrer.referrer?.name !== 'Walk-in') {
+			const referrerName = String(cartReferrer.referrer?.name || "").trim().toLowerCase();
+			const isWalkInReferrer = ["walk-in", "walkin", "walk in", ""].includes(referrerName);
+			if (!isWalkInReferrer) {
 				const referralLedgerPayload = {
 					order: orderData._id || orderData.id,
 					referrer: cartReferrer.referrer?.id,
@@ -573,11 +606,15 @@ export default function LaboratoryRegistrationPage() {
 					businessDate: orderData.bDate,
 					status: "pending",
 				};
-				await fetch("/api/referral-ledger", {
+				const ledgerRes = await fetch("/api/referral-ledger", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(referralLedgerPayload),
 				});
+				if (!ledgerRes.ok) {
+					const err = await ledgerRes.json().catch(() => ({}));
+					throw new Error(err?.error || "Failed to save referral ledger");
+				}
 			}
 
 			toast.success("Payment and order completed!");
@@ -684,6 +721,7 @@ export default function LaboratoryRegistrationPage() {
 			// 4. Prepare order payload
 			const orderPayload = {
 				patientId: selectedPatient.id,
+				gender: selectedPatient.gender,
 				name: selectedPatient.name,
 				tests: cart.map(item => ({
 					id: item.test.id,
@@ -814,6 +852,7 @@ export default function LaboratoryRegistrationPage() {
 				billTo: `${billToForBill}: ${resolvedBillToName}`,
 				transactionId: String(orderData.transId || "-"),
 				patientName: selectedPatient.name,
+				gender: selectedPatient.gender,
 				branchName: String(branchDoc?.branch || pathname.split("/")[2] || "-"),
 				branchPhone: String(branchDoc?.phone || "-"),
 				labName: String(pathname.split("/")[1] || "Laboratory"),
@@ -829,11 +868,9 @@ export default function LaboratoryRegistrationPage() {
 				balanceAmount: Number(billData?.balance ?? balance),
 			}, receiptWindow);
 
-
-		
-
-			// 8. Send referral ledger entry only if referrer is not 'Walk-in'
-			if (cartReferrer.referrer?.name !== 'Walk-in') {
+			const referrerName = String(cartReferrer.referrer?.name || "").trim().toLowerCase();
+			const isWalkInReferrer = ["walk-in", "walkin", "walk in", ""].includes(referrerName);
+			if (!isWalkInReferrer) {
 				const referralLedgerPayload = {
 					order: orderData._id || orderData.id,
 					referrer: cartReferrer.referrer?.id,
@@ -846,11 +883,15 @@ export default function LaboratoryRegistrationPage() {
 					businessDate: orderData.bDate,
 					status: "pending",
 				};
-				await fetch("/api/referral-ledger", {
+				const ledgerRes = await fetch("/api/referral-ledger", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(referralLedgerPayload),
 				});
+				if (!ledgerRes.ok) {
+					const err = await ledgerRes.json().catch(() => ({}));
+					throw new Error(err?.error || "Failed to save referral ledger");
+				}
 			}
 
 			toast.success("Bill created!");
@@ -938,7 +979,7 @@ export default function LaboratoryRegistrationPage() {
 				body: JSON.stringify(payload),
 			});
 			const data = await createRes.json();
-			console.log("Create referrer response:", { status: createRes.status, data });
+			// console.log("Create referrer response:", { status: createRes.status, data });
 
 			if (!createRes.ok) {
 				throw new Error(data?.error || "Failed to create referrer");

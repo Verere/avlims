@@ -20,6 +20,7 @@ type TestOrder = {
   _id: string;
   transId?: string;
   patientId?: string;
+  gender?: string;
   name?: string;
   amount?: number;
   amountPaid?: number;
@@ -149,12 +150,22 @@ export default function DashboardTestOrderDetailsPage() {
     setUpdatingReferrer(true);
     try {
       const selectedRef = referrers.find((r) => r._id === selectedReferrerId);
+      const updatedReferrerName = selectedRef?.name || "";
+      const optimisticOrder = {
+        ...order,
+        referral: updatedReferrerName,
+        referralId: selectedReferrerId,
+      };
+
+      setOrder(optimisticOrder);
+
       const res = await fetch(`/api/test-orders/${encodeURIComponent(order._id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           referralId: selectedReferrerId,
-          referral: selectedRef?.name || "",
+          referral: updatedReferrerName,
+          referrer: updatedReferrerName,
         }),
       });
       const data = await res.json();
@@ -162,7 +173,12 @@ export default function DashboardTestOrderDetailsPage() {
         throw new Error(data?.error || "Failed to update referrer");
       }
 
-      setOrder(data.order);
+      setOrder({
+        ...optimisticOrder,
+        ...(data.order || {}),
+        referral: data.order?.referral || updatedReferrerName,
+        referralId: data.order?.referralId || selectedReferrerId,
+      });
       setBanner({ type: "success", text: "Referrer updated successfully." });
     } catch (err: any) {
       setBanner({ type: "error", text: err?.message || "Failed to update referrer." });
@@ -255,7 +271,7 @@ export default function DashboardTestOrderDetailsPage() {
           footer { margin-top: 15px; padding-top: 9px; border-top: 1px dashed #64748b; color: #475569; font-size: 11px; text-align: center; }
         </style></head><body>
           <header><h1>${escapeHtml(labDoc.name || slug || "Laboratory")}</h1><div class="branch">${escapeHtml(branchDoc.name || branch || "-")}</div><div class="contact">${escapeHtml(branchDoc.address || labDoc.address || "-")} | ${escapeHtml(branchDoc.phone || "-")}</div></header>
-          <div class="details"><div class="detail"><span class="label">Patient</span><span>${escapeHtml(order.name)}</span></div><div class="detail"><span class="label">Reference</span><span>${escapeHtml(order.transId)}</span></div><div class="detail"><span class="label">Issued</span><span>${escapeHtml(formatDateTime(orderDate))}</span></div></div>
+          <div class="details"><div class="detail"><span class="label">Patient</span><span>${escapeHtml(order.name)}</span></div>${order.gender ? `<div class="detail"><span class="label">Gender</span><span>${escapeHtml(order.gender)}</span></div>` : ""}<div class="detail"><span class="label">Reference</span><span>${escapeHtml(order.transId)}</span></div><div class="detail"><span class="label">Issued</span><span>${escapeHtml(formatDateTime(orderDate))}</span></div></div>
           <table><thead><tr><th>Investigation</th><th>Amount</th></tr></thead><tbody>${testsHtml || "<tr><td>-</td><td>N0</td></tr>"}</tbody></table>
           <table class="summary"><tbody><tr><td>Total</td><td>${formatCurrency(total)}</td></tr><tr><td>Paid</td><td>${formatCurrency(paid)}</td></tr><tr class="total"><td>Balance Due</td><td>${formatCurrency(balance)}</td></tr></tbody></table>
           <footer>Thanks for your Patronage</footer>

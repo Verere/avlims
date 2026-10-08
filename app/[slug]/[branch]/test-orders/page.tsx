@@ -9,6 +9,7 @@ interface TestOrder {
   _id: string;
   transId?: string;
   patientId: string;
+  gender?: string;
   name: string;
   amount: number;
   amountPaid?: number;
@@ -237,7 +238,7 @@ export default function TestOrdersPage() {
           footer { margin-top: 15px; padding-top: 9px; border-top: 1px dashed #64748b; color: #475569; font-size: 11px; text-align: center; }
         </style></head><body>
           <header><h1>${escapeHtml(labDoc.name || labSlug || "Laboratory")}</h1><div class="branch">${escapeHtml(branchDoc.name || branchSlug || "-")}</div><div class="contact">${escapeHtml(branchDoc.address || labDoc.address || "-")} | ${escapeHtml(branchDoc.phone || "-")}</div></header>
-          <div class="details"><div class="detail"><span class="label">Patient</span><span>${escapeHtml(order.name)}</span></div><div class="detail"><span class="label">Reference</span><span>${escapeHtml(order.transId)}</span></div><div class="detail"><span class="label">Issued</span><span>${escapeHtml(formatDate(orderDate))} ${escapeHtml(formatTime(orderDate))}</span></div></div>
+          <div class="details"><div class="detail"><span class="label">Patient</span><span>${escapeHtml(order.name)}</span></div>${order.gender ? `<div class="detail"><span class="label">Gender</span><span>${escapeHtml(order.gender)}</span></div>` : ""}<div class="detail"><span class="label">Reference</span><span>${escapeHtml(order.transId)}</span></div><div class="detail"><span class="label">Issued</span><span>${escapeHtml(formatDate(orderDate))} ${escapeHtml(formatTime(orderDate))}</span></div></div>
           <table><thead><tr><th>Investigation</th><th>Amount</th></tr></thead><tbody>${testsHtml || "<tr><td>-</td><td>N0</td></tr>"}</tbody></table>
           <table class="summary"><tbody><tr><td>Total</td><td>${formatCurrency(total)}</td></tr><tr><td>Paid</td><td>${formatCurrency(paid)}</td></tr><tr class="total"><td>Balance Due</td><td>${formatCurrency(balance)}</td></tr></tbody></table>
           <footer>Thanks for your Patronage</footer>

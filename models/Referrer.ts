@@ -28,4 +28,6 @@ const ReferrerSchema: Schema = new Schema({
   timestamps: true,
 });
 
-export default mongoose.models.Referrer || mongoose.model<IReferrer>('Referrer', ReferrerSchema);
+const ReferrerModel = mongoose.models.Referrer || mongoose.model<IReferrer>('Referrer', ReferrerSchema);
+
+export default ReferrerModel;

@@ -2,6 +2,7 @@ import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export interface IOrder extends Document {
   patientId: string;
+  gender?: string;
   name: string;
   tests: any[];
   transId?: string;
@@ -31,6 +32,7 @@ export interface IOrder extends Document {
 
 const OrderSchema: Schema<IOrder> = new mongoose.Schema({
   patientId:{type: String},
+  gender: { type: String },
   name:{type: String},
   tests: [mongoose.Schema.Types.Mixed],
   transId: { type: String, unique: true, sparse: true },
@@ -60,9 +62,5 @@ const OrderSchema: Schema<IOrder> = new mongoose.Schema({
   timestamps: true
 });
 
-if (mongoose.models.Order) {
-  delete mongoose.models.Order;
-}
-
-const Order: Model<IOrder> = mongoose.model<IOrder>('Order', OrderSchema);
+const Order: Model<IOrder> = mongoose.models.Order || mongoose.model<IOrder>('Order', OrderSchema);
 export default Order;
