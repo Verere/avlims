@@ -195,12 +195,16 @@ export async function PATCH(req: NextRequest) {
     if (body?.action === 'recalculatePending') {
       const branchId = String(body.branchId || '').trim();
       const referrerId = String(body.referrerId || '').trim();
+      const testId = String(body.testId || '').trim();
       const percentage = Number(body.percentage);
       if (!mongoose.Types.ObjectId.isValid(branchId)) {
         return NextResponse.json({ error: 'A valid branchId is required' }, { status: 400 });
       }
       if (referrerId && !mongoose.Types.ObjectId.isValid(referrerId)) {
         return NextResponse.json({ error: 'A valid referrerId is required' }, { status: 400 });
+      }
+      if (testId && !mongoose.Types.ObjectId.isValid(testId)) {
+        return NextResponse.json({ error: 'A valid testId is required' }, { status: 400 });
       }
       if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
         return NextResponse.json({ error: 'Percentage must be between 0 and 100' }, { status: 400 });
@@ -212,18 +216,22 @@ export async function PATCH(req: NextRequest) {
         isCancelled: { $ne: true },
       };
       if (referrerId) pendingFilter.referrer = referrerId;
+      if (testId) pendingFilter['tests.testId'] = testId;
       const pendingLedgers = await ReferralLedger.find(pendingFilter);
 
       for (const ledger of pendingLedgers) {
         if (Array.isArray(ledger.tests) && ledger.tests.length > 0) {
           for (const test of ledger.tests) {
+            if (testId && test.testId !== testId) continue;
             const amount = Number(test.amount || 0);
             test.bonus = Math.round((amount * percentage / 100 + Number.EPSILON) * 100) / 100;
           }
           ledger.bonus = ledger.tests.reduce((sum: number, test: any) => sum + Number(test.bonus || 0), 0);
-        } else {
+        } else if (!testId) {
           const amount = Number(ledger.amount || 0);
           ledger.bonus = Math.round((amount * percentage / 100 + Number.EPSILON) * 100) / 100;
+        } else {
+          continue;
         }
         await ledger.save();
       }
@@ -233,6 +241,7 @@ export async function PATCH(req: NextRequest) {
         updatedCount: pendingLedgers.length,
         percentage,
         referrerId: referrerId || undefined,
+        testId: testId || undefined,
       });
     }
 

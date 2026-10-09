@@ -129,6 +129,12 @@ export default function ReferrerBonusPage() {
   const [recalculatingPending, setRecalculatingPending] = useState<boolean>(false);
   const [showRecalculateModal, setShowRecalculateModal] = useState<boolean>(false);
   const [recalculateReferrer, setRecalculateReferrer] = useState<{ id: string; name: string } | null>(null);
+  const [recalculateScope, setRecalculateScope] = useState<"all" | "test">("all");
+  const [recalculationTests, setRecalculationTests] = useState<Array<{ id: string; name: string; code: string; category: string }>>([]);
+  const [testsLoadedForBranch, setTestsLoadedForBranch] = useState<string>("");
+  const [recalculationTestsLoading, setRecalculationTestsLoading] = useState<boolean>(false);
+  const [recalculationTestSearch, setRecalculationTestSearch] = useState<string>("");
+  const [recalculationTestId, setRecalculationTestId] = useState<string>("");
   const [recalculatePercentageDraft, setRecalculatePercentageDraft] = useState<string>("20");
   const [recalculateError, setRecalculateError] = useState<string>("");
   const [updatingBonusKey, setUpdatingBonusKey] = useState<string | null>(null);
@@ -191,6 +197,70 @@ export default function ReferrerBonusPage() {
       isMounted = false;
     };
   }, [labSlug, branchSlug, fromDate, toDate]);
+
+  useEffect(() => {
+    if (
+      !showRecalculateModal ||
+      recalculateScope !== "test" ||
+      !branchId ||
+      testsLoadedForBranch === branchId
+    ) return;
+
+    let isMounted = true;
+    setRecalculationTestsLoading(true);
+    setRecalculateError("");
+
+    async function loadTests() {
+      try {
+        const res = await fetch(`/api/tests?branchId=${encodeURIComponent(branchId)}`);
+        if (!res.ok) {
+          const error = await res.json().catch(() => ({ error: "Failed to load tests" }));
+          throw new Error(error.error || "Failed to load tests");
+        }
+
+        const data = await res.json() as Array<{ id?: string; _id?: string; name?: string; code?: string; category?: string }>;
+        if (!isMounted) return;
+        setRecalculationTests(Array.isArray(data)
+          ? data
+              .map((test) => ({
+                id: String(test.id || test._id || ""),
+                name: String(test.name || ""),
+                code: String(test.code || ""),
+                category: String(test.category || ""),
+              }))
+              .filter((test) => test.id && test.name)
+          : []);
+        setTestsLoadedForBranch(branchId);
+      } catch (err: unknown) {
+        if (isMounted) {
+          setRecalculateError(err instanceof Error ? err.message : "Failed to load tests");
+        }
+      } finally {
+        if (isMounted) setRecalculationTestsLoading(false);
+      }
+    }
+
+    void loadTests();
+    return () => {
+      isMounted = false;
+    };
+  }, [showRecalculateModal, recalculateScope, branchId, testsLoadedForBranch]);
+
+  const openRecalculateModal = (referrer: { id: string; name: string } | null = null) => {
+    setRecalculateError("");
+    setRecalculateReferrer(referrer);
+    setRecalculateScope("all");
+    setRecalculationTestSearch("");
+    setRecalculationTestId("");
+    setShowRecalculateModal(true);
+  };
+
+  const filteredRecalculationTests = useMemo(() => {
+    const query = recalculationTestSearch.trim().toLowerCase();
+    return recalculationTests.filter((test) =>
+      [test.name, test.code, test.category].some((value) => value.toLowerCase().includes(query))
+    );
+  }, [recalculationTests, recalculationTestSearch]);
 
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -648,6 +718,11 @@ export default function ReferrerBonusPage() {
       setRecalculateError("Enter a percentage between 0 and 100.");
       return;
     }
+    const selectedTest = recalculationTests.find((test) => test.id === recalculationTestId);
+    if (recalculateScope === "test" && !selectedTest) {
+      setRecalculateError("Select a test to recalculate.");
+      return;
+    }
 
     setRecalculateError("");
     setRecalculatingPending(true);
@@ -660,6 +735,7 @@ export default function ReferrerBonusPage() {
           branchId,
           percentage,
           referrerId: recalculateReferrer?.id,
+          testId: recalculateScope === "test" ? selectedTest?.id : undefined,
         }),
       });
       const data = await res.json();
@@ -670,7 +746,8 @@ export default function ReferrerBonusPage() {
       setShowRecalculateModal(false);
       setRecalculateReferrer(null);
       const target = recalculateReferrer ? ` for ${recalculateReferrer.name}` : "";
-      toast.success(`Updated ${data.updatedCount} pending entries${target} to ${percentage}%.`);
+      const testTarget = selectedTest ? ` for ${selectedTest.name}` : "";
+      toast.success(`Updated ${data.updatedCount} pending entries${target}${testTarget} to ${percentage}%.`);
     } catch (err: any) {
       setRecalculateError(err?.message || "Failed to recalculate pending bonuses.");
     } finally {
@@ -758,8 +835,78 @@ export default function ReferrerBonusPage() {
                 {recalculateReferrer ? `Recalculate pending bonuses for ${recalculateReferrer.name}` : "Recalculate pending bonuses"}
               </h2>
               <p className={`mt-2 text-sm ${pageTheme.mutedText}`}>
-                This percentage will apply to all pending, non-cancelled entries {recalculateReferrer ? `for ${recalculateReferrer.name}` : "in this branch"} across all dates. Paid and cancelled entries will not change.
+                This percentage applies to pending, non-cancelled entries {recalculateReferrer ? `for ${recalculateReferrer.name}` : "in this branch"} across all dates. Paid and cancelled entries will not change.
               </p>
+              <label className={`mt-4 flex flex-col text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                Recalculate
+                <select
+                  value={recalculateScope}
+                  onChange={(event) => {
+                    setRecalculateScope(event.target.value as "all" | "test");
+                    setRecalculationTestId("");
+                    setRecalculationTestSearch("");
+                    setRecalculateError("");
+                  }}
+                  className={pageTheme.input}
+                >
+                  <option value="all">All tests</option>
+                  <option value="test">Specific test</option>
+                </select>
+              </label>
+              {recalculateScope === "test" && (
+                <div className="mt-3 space-y-3">
+                  <label className={`flex flex-col text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                    Search tests
+                    <input
+                      type="search"
+                      value={recalculationTestSearch}
+                      onChange={(event) => setRecalculationTestSearch(event.target.value)}
+                      placeholder="Search by name, code, or category"
+                      className={pageTheme.input}
+                    />
+                  </label>
+                  {!recalculationTestsLoading && testsLoadedForBranch === branchId && (
+                    <p className={`text-xs ${pageTheme.mutedText}`}>
+                      Showing {filteredRecalculationTests.length} of {recalculationTests.length} tests
+                    </p>
+                  )}
+                  <div
+                    role="radiogroup"
+                    aria-label="Select a test to recalculate"
+                    className={`max-h-48 overflow-y-auto rounded-lg border ${isDarkMode ? "border-slate-700" : "border-slate-200"}`}
+                  >
+                    {recalculationTestsLoading ? (
+                      <p className={`px-3 py-3 text-sm ${pageTheme.mutedText}`}>Loading tests...</p>
+                    ) : filteredRecalculationTests.map((test) => (
+                        <label
+                          key={test.id}
+                          className={`flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 text-sm last:border-b-0 ${
+                            recalculationTestId === test.id
+                              ? isDarkMode ? "bg-slate-800 text-slate-100" : "bg-blue-50 text-slate-900"
+                              : isDarkMode ? "text-slate-300 hover:bg-slate-800/60" : "text-slate-700 hover:bg-slate-50"
+                          } ${isDarkMode ? "border-slate-800" : "border-slate-100"}`}
+                        >
+                          <input
+                            type="radio"
+                            name="recalculation-test"
+                            value={test.id}
+                            checked={recalculationTestId === test.id}
+                            onChange={() => {
+                              setRecalculationTestId(test.id);
+                              setRecalculateError("");
+                            }}
+                          />
+                          <span>{test.name}</span>
+                        </label>
+                      ))}
+                    {!recalculationTestsLoading && filteredRecalculationTests.length === 0 && (
+                      <p className={`px-3 py-3 text-sm ${pageTheme.mutedText}`}>
+                        {recalculationTests.length === 0 ? "No tests found for this branch." : "No tests match your search."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               <label className={`mt-4 flex flex-col text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
                 Bonus percentage
                 <div className="relative mt-1">
@@ -786,6 +933,7 @@ export default function ReferrerBonusPage() {
                   onClick={() => {
                     setShowRecalculateModal(false);
                     setRecalculateReferrer(null);
+                    setRecalculationTestsLoading(false);
                     setRecalculateError("");
                   }}
                   disabled={recalculatingPending}
@@ -956,9 +1104,7 @@ export default function ReferrerBonusPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setRecalculateError("");
-                  setRecalculateReferrer(null);
-                  setShowRecalculateModal(true);
+                  openRecalculateModal();
                 }}
                 disabled={!branchId || recalculatingPending}
                 className={`${pageTheme.button} ${recalculatingPending ? "cursor-not-allowed opacity-60" : ""}`}
@@ -1027,11 +1173,7 @@ export default function ReferrerBonusPage() {
                       <div className="flex flex-wrap justify-end gap-2">
                         <button
                           type="button"
-                          onClick={() => {
-                            setRecalculateError("");
-                            setRecalculateReferrer({ id: group.referrerId, name: group.referrer });
-                            setShowRecalculateModal(true);
-                          }}
+                          onClick={() => openRecalculateModal({ id: group.referrerId, name: group.referrer })}
                           disabled={!group.referrerId || recalculatingPending}
                           className={`${pageTheme.button} ${!group.referrerId || recalculatingPending ? "cursor-not-allowed opacity-60" : ""}`}
                         >
