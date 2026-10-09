@@ -276,9 +276,7 @@ export default function ReferrerBonusPage() {
       if (!query) return true;
 
       const referrer = referrerName(row.referrer).toLowerCase();
-      const patient = patientName(row.testOrder).toLowerCase();
-      const tests = (Array.isArray(row.tests) ? row.tests : []).map((test) => test.testName.toLowerCase());
-      return [referrer, patient, ...tests].some((value) => value.includes(query));
+      return referrer.includes(query);
     }).sort((a, b) => rowTimestamp(b) - rowTimestamp(a));
   }, [rows, searchQuery, statusFilter]);
 
@@ -299,7 +297,6 @@ export default function ReferrerBonusPage() {
     const grouped = new Map<string, {
       referrer: string;
       referrerId: string;
-      latestDate: number;
       entries: number;
       amount: number;
       bonus: number;
@@ -327,7 +324,6 @@ export default function ReferrerBonusPage() {
       const current = grouped.get(refKey) || {
         referrer: refName,
         referrerId,
-        latestDate: Number.NEGATIVE_INFINITY,
         entries: 0,
         amount: 0,
         bonus: 0,
@@ -346,7 +342,6 @@ export default function ReferrerBonusPage() {
             bonus: Number(row.bonus || 0),
           }];
 
-      current.latestDate = Math.max(current.latestDate, rowTimestamp(row));
       rowTests.forEach((test, index) => {
         const testAmount = Number(test.amount || 0);
         const testBonus = Number(test.bonus || 0);
@@ -375,7 +370,9 @@ export default function ReferrerBonusPage() {
       grouped.set(refKey, current);
     }
 
-    return Array.from(grouped.values()).sort((a, b) => b.latestDate - a.latestDate);
+    return Array.from(grouped.values()).sort((a, b) =>
+      a.referrer.localeCompare(b.referrer, undefined, { sensitivity: "base" })
+    );
   }, [filteredRows]);
 
   const buildReferrerReportText = (group: any) => {
@@ -741,6 +738,8 @@ export default function ReferrerBonusPage() {
           percentage,
           referrerId: recalculateReferrer?.id,
           testId: recalculateScope === "test" ? selectedTest?.id : undefined,
+          fromDate,
+          toDate,
         }),
       });
       const data = await res.json();
@@ -752,7 +751,10 @@ export default function ReferrerBonusPage() {
       setRecalculateReferrer(null);
       const target = recalculateReferrer ? ` for ${recalculateReferrer.name}` : "";
       const testTarget = selectedTest ? ` for ${selectedTest.name}` : "";
-      toast.success(`Updated ${data.updatedCount} pending entries${target}${testTarget} to ${percentage}%.`);
+      const createdTarget = data.createdCount
+        ? ` and added ${data.createdCount} missing order${data.createdCount === 1 ? "" : "s"}`
+        : "";
+      toast.success(`Updated ${data.updatedCount} pending entries${createdTarget}${target}${testTarget} to ${percentage}%.`);
     } catch (err: any) {
       setRecalculateError(err?.message || "Failed to recalculate pending bonuses.");
     } finally {
@@ -840,7 +842,7 @@ export default function ReferrerBonusPage() {
                 {recalculateReferrer ? `Recalculate pending bonuses for ${recalculateReferrer.name}` : "Recalculate pending bonuses"}
               </h2>
               <p className={`mt-2 text-sm ${pageTheme.mutedText}`}>
-                This percentage applies to pending, non-cancelled entries {recalculateReferrer ? `for ${recalculateReferrer.name}` : "in this branch"} across all dates. Paid and cancelled entries will not change.
+                This percentage applies to pending, non-cancelled entries in the selected date range {recalculateReferrer ? `for ${recalculateReferrer.name}` : "in this branch"}. Missing ledgers are added for matching orders when recalculating a specific referrer. Paid and cancelled entries will not change.
               </p>
               <label className={`mt-4 flex flex-col text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
                 Recalculate

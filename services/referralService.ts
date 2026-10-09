@@ -16,7 +16,7 @@ export async function getReferrers(branchId?: string) {
   if (branchId) filter.branchId = branchId;
   return Referrer.find(filter)
     .populate('refClinic', 'name')
-    .sort({ createdAt: -1 })
+    .sort({ name: 1, _id: 1 })
     .lean();
 }
 

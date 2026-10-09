@@ -15,6 +15,7 @@ export interface IPayment extends Document {
   orderId?: Types.ObjectId;
   payments: PaymentEntry[];
   status: 'pending' | 'completed' | 'failed';
+  isFullPayment?: boolean;
   transactionId?: string;
   slug: string;
   businessDate?: string;
@@ -42,6 +43,7 @@ const PaymentSchema = new Schema<IPayment>({
   businessDate: { type: String },
   payments: { type: [PaymentEntrySchema], required: true },
   status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
+  isFullPayment: { type: Boolean, default: false },
   transactionId: { type: String },
   isCancelled: { type: Boolean, default: false },
   userId:  { type: Schema.Types.ObjectId, ref: 'User' },

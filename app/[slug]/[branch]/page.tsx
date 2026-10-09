@@ -529,7 +529,8 @@ export default function LaboratoryRegistrationPage() {
 				throw new Error("Order ID not returned from backend");
 			}
 
-			
+			const referrerName = String(cartReferrer.referrer?.name || "").trim().toLowerCase();
+			const isWalkInReferrer = ["walk-in", "walkin", "walk in", ""].includes(referrerName);
 
 			// 6. Prepare payment payload with testOrderItem and full order
 			const paymentPayload = {
@@ -545,8 +546,16 @@ export default function LaboratoryRegistrationPage() {
 				slug: branchSlug, // required
 				orderId: orderData._id || orderData.id, // required
 				bDate: orderData.bDate, // required (maps to businessDate)
+				isFullPayment: true,
 				// Optional fields
 				transactionId: orderData.transId,
+				referralLedger: isWalkInReferrer ? undefined : {
+					referrer: cartReferrer.referrer?.id,
+					tests: ledgerTests,
+					amount: total,
+					bonus,
+					status: "pending",
+				},
 			};
 
 			// 7. Send payment
@@ -590,32 +599,6 @@ export default function LaboratoryRegistrationPage() {
 				revenueAmount: revenue,
 				balanceAmount: balance,
 			}, receiptWindow);
-
-			const referrerName = String(cartReferrer.referrer?.name || "").trim().toLowerCase();
-			const isWalkInReferrer = ["walk-in", "walkin", "walk in", ""].includes(referrerName);
-			if (!isWalkInReferrer) {
-				const referralLedgerPayload = {
-					order: orderData._id || orderData.id,
-					referrer: cartReferrer.referrer?.id,
-					tests: ledgerTests,
-					amount: total,
-					bonus,
-					branchId: branchId,
-					lab: branchDoc.lab || branchDoc._id,
-					user: user.id,
-					businessDate: orderData.bDate,
-					status: "pending",
-				};
-				const ledgerRes = await fetch("/api/referral-ledger", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(referralLedgerPayload),
-				});
-				if (!ledgerRes.ok) {
-					const err = await ledgerRes.json().catch(() => ({}));
-					throw new Error(err?.error || "Failed to save referral ledger");
-				}
-			}
 
 			toast.success("Payment and order completed!");
 			// Optionally clear state
