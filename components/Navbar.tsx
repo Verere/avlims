@@ -1,9 +1,10 @@
 "use client"
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { HiMoon, HiSun } from "react-icons/hi2";
+import { toast } from "react-toastify";
 import { useTheme } from "./ThemeProvider";
 
 const navLinks = [
@@ -16,9 +17,16 @@ const navLinks = [
   { href: "/eod", label: "EOD" },
   { href: "/login", label: "Logout" },
 ];
+const adminDashboardUrl = "https://avlims.vercel.app/resonance-medical-diagnostics-ltd/ughelli/dashboard";
+const displayedNavLinks = [
+  ...navLinks.slice(0, -1),
+  { href: adminDashboardUrl, label: "Admin" },
+  navLinks[navLinks.length - 1],
+];
 
 export default function Navbar() {
 const [open, setOpen] = useState(false);
+  const [canAccessAdmin, setCanAccessAdmin] = useState<boolean | null>(null);
   const { isDarkMode, toggleTheme } = useTheme();
   const pathname = usePathname();
   // Extract slug and branch from /[slug]/[branch]/...
@@ -26,8 +34,37 @@ const [open, setOpen] = useState(false);
   const slug = pathParts[0] || "";
   const branch = pathParts[1] || "";
 
+  useEffect(() => {
+    let isMounted = true;
+    setCanAccessAdmin(null);
+    if (!slug || !branch) return () => { isMounted = false; };
+
+    const query = new URLSearchParams({ labSlug: slug, branchSlug: branch });
+    fetch(`/api/session/admin-access?${query.toString()}`)
+      .then(async (res) => res.ok ? res.json() : { isAdmin: false })
+      .then((data) => {
+        if (isMounted) setCanAccessAdmin(data?.isAdmin === true);
+      })
+      .catch(() => {
+        if (isMounted) setCanAccessAdmin(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [slug, branch]);
+
+  const handleNavClick = (event: React.MouseEvent<HTMLAnchorElement>, href: string, closeMobile = false) => {
+    if (href === adminDashboardUrl && canAccessAdmin !== true) {
+      event.preventDefault();
+      if (canAccessAdmin === false) toast.error("Admin only");
+      else toast.info("Checking admin access");
+      return;
+    }
+    if (closeMobile) setOpen(false);
+  };
+
   // Helper to build href with slug/branch if needed
   const buildHref = (href: string) => {
+    if (href.startsWith("https://")) return href;
     // Home should always go to /slug/branch if available
     if (href === "/" && slug && branch) return `/${slug}/${branch}`;
     // If login, don't prefix
@@ -69,8 +106,13 @@ const [open, setOpen] = useState(false);
           
         </div>
         <div className="hidden md:flex gap-6">
-          {navLinks.map(link => (
-            <Link key={link.href} href={buildHref(link.href)} className="hover:text-blue-700 font-medium">
+          {displayedNavLinks.map(link => (
+            <Link
+              key={link.href}
+              href={buildHref(link.href)}
+              className="hover:text-blue-700 font-medium"
+              onClick={(event) => handleNavClick(event, link.href)}
+            >
               {link.label}
             </Link>
           ))}
@@ -99,12 +141,12 @@ const [open, setOpen] = useState(false);
       {/* Mobile menu */}
       {open && (
         <div className="md:hidden bg-white border-t shadow px-4 pb-4">
-          {navLinks.map(link => (
+          {displayedNavLinks.map(link => (
             <Link
               key={link.href}
               href={buildHref(link.href)}
               className="block py-2 text-gray-700 hover:text-blue-700 font-medium"
-              onClick={() => setOpen(false)}
+              onClick={(event) => handleNavClick(event, link.href, true)}
             >
               {link.label}
             </Link>
