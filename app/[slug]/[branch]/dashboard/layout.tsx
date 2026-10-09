@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect, use } from "react";
 import Sidebar from "../../../../components/Dashboard/Sidebar";
-import { HiMoon, HiSun } from "react-icons/hi2";
-import { useTheme } from "../../../../components/ThemeProvider";
 
 export default function Layout({ children, params }: { children: React.ReactNode; params: Promise<{ slug: string; branch: string }> }) {
   const { slug, branch } = use(params);
@@ -11,7 +9,6 @@ export default function Layout({ children, params }: { children: React.ReactNode
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lab, setLab] = useState<any>(null);
   const [branchDoc, setBranchDoc] = useState<any>(null);
-  const { isDarkMode, toggleTheme } = useTheme();
 
   useEffect(() => {
     (async () => {
@@ -63,15 +60,6 @@ export default function Layout({ children, params }: { children: React.ReactNode
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-              title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-              className="rounded-full border border-gray-200 p-2 text-gray-700 transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            >
-              {isDarkMode ? <HiSun className="h-5 w-5 text-amber-400" /> : <HiMoon className="h-5 w-5 text-blue-700" />}
-            </button>
             {/* Notification Icon */}
             <button aria-label="Notifications" className="relative hidden rounded-full p-2 hover:bg-blue-50 focus:outline-none sm:inline-flex">
               <svg className="w-6 h-6 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

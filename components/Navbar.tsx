@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { HiMoon, HiSun } from "react-icons/hi2";
 import { toast } from "react-toastify";
 import { useTheme } from "./ThemeProvider";
@@ -17,42 +18,55 @@ const navLinks = [
   { href: "/eod", label: "EOD" },
   { href: "/login", label: "Logout" },
 ];
-const adminDashboardUrl = "https://avlims.vercel.app/resonance-medical-diagnostics-ltd/ughelli/dashboard";
-const displayedNavLinks = [
-  ...navLinks.slice(0, -1),
-  { href: adminDashboardUrl, label: "Admin" },
-  navLinks[navLinks.length - 1],
-];
-
 export default function Navbar() {
 const [open, setOpen] = useState(false);
-  const [canAccessAdmin, setCanAccessAdmin] = useState<boolean | null>(null);
+  const [adminAccess, setAdminAccess] = useState<{ scope: string; allowed: boolean | null } | null>(null);
   const { isDarkMode, toggleTheme } = useTheme();
   const pathname = usePathname();
   // Extract slug and branch from /[slug]/[branch]/...
   const pathParts = (pathname || "").split("/").filter(Boolean);
   const slug = pathParts[0] || "";
   const branch = pathParts[1] || "";
+  const adminScope = `${slug}/${branch}`;
+  const adminDashboardUrl = slug && branch ? `/${slug}/${branch}/dashboard` : "/dashboard";
+  const displayedNavLinks = [
+    ...navLinks.slice(0, -1),
+    { href: adminDashboardUrl, label: "Admin" },
+    navLinks[navLinks.length - 1],
+  ];
+  const canAccessAdmin = adminAccess?.scope === adminScope ? adminAccess.allowed : null;
 
   useEffect(() => {
     let isMounted = true;
-    setCanAccessAdmin(null);
     if (!slug || !branch) return () => { isMounted = false; };
 
     const query = new URLSearchParams({ labSlug: slug, branchSlug: branch });
-    fetch(`/api/session/admin-access?${query.toString()}`)
-      .then(async (res) => res.ok ? res.json() : { isAdmin: false })
+    fetch(`/api/session/admin-access?${query.toString()}`, { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Unable to verify admin access");
+        return res.json();
+      })
       .then((data) => {
-        if (isMounted) setCanAccessAdmin(data?.isAdmin === true);
+        if (isMounted) setAdminAccess({ scope: adminScope, allowed: data?.isAdmin === true });
       })
       .catch(() => {
-        if (isMounted) setCanAccessAdmin(false);
+        if (isMounted) {
+          setAdminAccess({ scope: adminScope, allowed: null });
+          toast.error("Unable to verify admin access");
+        }
       });
 
     return () => { isMounted = false; };
-  }, [slug, branch]);
+  }, [slug, branch, adminScope]);
 
   const handleNavClick = (event: React.MouseEvent<HTMLAnchorElement>, href: string, closeMobile = false) => {
+    if (href === "/login") {
+      event.preventDefault();
+      if (closeMobile) setOpen(false);
+      void signOut({ callbackUrl: "/login" });
+      return;
+    }
+
     if (href === adminDashboardUrl && canAccessAdmin !== true) {
       event.preventDefault();
       if (canAccessAdmin === false) toast.error("Admin only");
