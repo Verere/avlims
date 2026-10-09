@@ -1,9 +1,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
+import { getToken } from 'next-auth/jwt';
 import { dbConnect } from '@/lib/mongodb';
 import ReferralLedger from '@/models/ReferralLedger';
 import Referrer from '@/models/Referrer';
 import Order from '@/models/Order';
+import AuditLog from '@/models/AuditLog';
 
 export async function GET(req: NextRequest) {
   await dbConnect();
@@ -111,6 +114,128 @@ export async function PATCH(req: NextRequest) {
   await dbConnect();
   try {
     const body = await req.json();
+
+    if (body?.action === 'markReferrerPendingPaid') {
+      const branchId = String(body.branchId || '').trim();
+      const referrerId = String(body.referrerId || '').trim();
+      const ledgerIds: string[] = Array.isArray(body.ledgerIds)
+        ? Array.from(new Set<string>(body.ledgerIds.map((id: unknown) => String(id || '').trim())))
+        : [];
+
+      if (!mongoose.Types.ObjectId.isValid(branchId) || !mongoose.Types.ObjectId.isValid(referrerId)) {
+        return NextResponse.json({ error: 'Valid branchId and referrerId are required' }, { status: 400 });
+      }
+      if (ledgerIds.length === 0 || ledgerIds.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
+        return NextResponse.json({ error: 'Valid fetched ledgerIds are required' }, { status: 400 });
+      }
+
+      const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      const actorId = mongoose.Types.ObjectId.isValid(String(token?.id || ''))
+        ? new mongoose.Types.ObjectId(String(token?.id))
+        : undefined;
+      const forwardedFor = req.headers.get('x-forwarded-for');
+      const session = await mongoose.startSession();
+      let updatedLedgerIds: string[] = [];
+
+      try {
+        await session.withTransaction(async () => {
+          const pendingLedgers = await ReferralLedger.find({
+            _id: { $in: ledgerIds },
+            branchId,
+            referrer: referrerId,
+            status: 'pending',
+            isCancelled: { $ne: true },
+          }).session(session);
+
+          for (const ledger of pendingLedgers) {
+            ledger.status = 'paid';
+            await ledger.save({ session });
+          }
+
+          if (pendingLedgers.length > 0) {
+            await AuditLog.create(
+              pendingLedgers.map((ledger) => ({
+                action: 'status_change',
+                entityType: 'ReferralLedger',
+                entityId: String(ledger._id),
+                actorId,
+                actorName: typeof token?.name === 'string' ? token.name : undefined,
+                actorEmail: typeof token?.email === 'string' ? token.email : undefined,
+                labId: ledger.lab,
+                branchId: ledger.branchId,
+                changes: { status: { from: 'pending', to: 'paid' } },
+                metadata: {
+                  referrerId: String(ledger.referrer),
+                  amount: ledger.amount,
+                  bonus: ledger.bonus,
+                  testOrderId: String(ledger.testOrder),
+                },
+                requestMethod: req.method,
+                requestPath: req.nextUrl.pathname,
+                ipAddress: forwardedFor?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || undefined,
+                userAgent: req.headers.get('user-agent') || undefined,
+              })),
+              { session, ordered: true }
+            );
+          }
+
+          updatedLedgerIds = pendingLedgers.map((ledger) => String(ledger._id));
+        });
+      } finally {
+        await session.endSession();
+      }
+
+      return NextResponse.json({
+        success: true,
+        updatedCount: updatedLedgerIds.length,
+        updatedLedgerIds,
+      });
+    }
+
+    if (body?.action === 'recalculatePending') {
+      const branchId = String(body.branchId || '').trim();
+      const referrerId = String(body.referrerId || '').trim();
+      const percentage = Number(body.percentage);
+      if (!mongoose.Types.ObjectId.isValid(branchId)) {
+        return NextResponse.json({ error: 'A valid branchId is required' }, { status: 400 });
+      }
+      if (referrerId && !mongoose.Types.ObjectId.isValid(referrerId)) {
+        return NextResponse.json({ error: 'A valid referrerId is required' }, { status: 400 });
+      }
+      if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+        return NextResponse.json({ error: 'Percentage must be between 0 and 100' }, { status: 400 });
+      }
+
+      const pendingFilter: Record<string, unknown> = {
+        branchId,
+        status: 'pending',
+        isCancelled: { $ne: true },
+      };
+      if (referrerId) pendingFilter.referrer = referrerId;
+      const pendingLedgers = await ReferralLedger.find(pendingFilter);
+
+      for (const ledger of pendingLedgers) {
+        if (Array.isArray(ledger.tests) && ledger.tests.length > 0) {
+          for (const test of ledger.tests) {
+            const amount = Number(test.amount || 0);
+            test.bonus = Math.round((amount * percentage / 100 + Number.EPSILON) * 100) / 100;
+          }
+          ledger.bonus = ledger.tests.reduce((sum: number, test: any) => sum + Number(test.bonus || 0), 0);
+        } else {
+          const amount = Number(ledger.amount || 0);
+          ledger.bonus = Math.round((amount * percentage / 100 + Number.EPSILON) * 100) / 100;
+        }
+        await ledger.save();
+      }
+
+      return NextResponse.json({
+        success: true,
+        updatedCount: pendingLedgers.length,
+        percentage,
+        referrerId: referrerId || undefined,
+      });
+    }
+
     const ledgerId = body?.id || body?._id;
     const testIndex = Number(body?.testIndex ?? -1);
     const newBonus = Number(body?.bonus ?? 0);

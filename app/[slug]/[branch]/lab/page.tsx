@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "react-toastify";
 import Navbar from "@/components/Navbar";
 import AuditTrailPanel from "@/components/lab/AuditTrailPanel";
 import CommentCard from "@/components/lab/CommentCard";
@@ -162,7 +163,7 @@ export default function LabResultEntryPage() {
 
   function handleRelease() {
     if (criticalUnacknowledged) {
-      window.alert("Cannot release report: critical results must be acknowledged.");
+      toast.warning("Cannot release report: critical results must be acknowledged.");
       return;
     }
 

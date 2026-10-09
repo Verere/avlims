@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
+import { toast } from "react-toastify";
 
 type LedgerRow = {
   _id: string;
@@ -119,11 +120,19 @@ export default function ReferrerBonusPage() {
   const [fromDate, setFromDate] = useState<string>(today);
   const [toDate, setToDate] = useState<string>(today);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "paid">("pending");
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [labName, setLabName] = useState<string>("");
+  const [branchId, setBranchId] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+  const [recalculatingPending, setRecalculatingPending] = useState<boolean>(false);
+  const [showRecalculateModal, setShowRecalculateModal] = useState<boolean>(false);
+  const [recalculateReferrer, setRecalculateReferrer] = useState<{ id: string; name: string } | null>(null);
+  const [recalculatePercentageDraft, setRecalculatePercentageDraft] = useState<string>("20");
+  const [recalculateError, setRecalculateError] = useState<string>("");
   const [updatingBonusKey, setUpdatingBonusKey] = useState<string | null>(null);
+  const [updatingReferrerId, setUpdatingReferrerId] = useState<string | null>(null);
   const [bonusEditor, setBonusEditor] = useState<{
     ledgerId: string;
     testIndex: number;
@@ -147,6 +156,7 @@ export default function ReferrerBonusPage() {
         setError("Missing branch in URL");
         setRows([]);
         setLabName("");
+        setBranchId("");
         setLoading(false);
         return;
       }
@@ -162,6 +172,7 @@ export default function ReferrerBonusPage() {
         ]);
         if (!isMounted) return;
         setLabName(String(lab?.name || ""));
+        setBranchId(String(branchDoc._id || ""));
         const data = await fetchReferralLedger(branchDoc._id, fromDate, toDate);
         if (!isMounted) return;
         setRows(Array.isArray(data) ? data : []);
@@ -183,15 +194,16 @@ export default function ReferrerBonusPage() {
 
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return rows;
-
     return rows.filter((row) => {
+      if (statusFilter !== "all" && row.status !== statusFilter) return false;
+      if (!query) return true;
+
       const referrer = referrerName(row.referrer).toLowerCase();
       const patient = patientName(row.testOrder).toLowerCase();
       const tests = (Array.isArray(row.tests) ? row.tests : []).map((test) => test.testName.toLowerCase());
       return [referrer, patient, ...tests].some((value) => value.includes(query));
     });
-  }, [rows, searchQuery]);
+  }, [rows, searchQuery, statusFilter]);
 
   const totals = useMemo(() => {
     return filteredRows.reduce(
@@ -209,6 +221,7 @@ export default function ReferrerBonusPage() {
   const groupedRows = useMemo(() => {
     const grouped = new Map<string, {
       referrer: string;
+      referrerId: string;
       entries: number;
       amount: number;
       bonus: number;
@@ -229,11 +242,13 @@ export default function ReferrerBonusPage() {
 
     for (const row of filteredRows) {
       const refName = referrerName(row.referrer);
+      const referrerId = typeof row.referrer === "string" ? row.referrer : String(row.referrer?._id || "");
       const patient = patientName(row.testOrder);
-      const refKey = refName.toLowerCase();
+      const refKey = referrerId || refName.toLowerCase();
 
       const current = grouped.get(refKey) || {
         referrer: refName,
+        referrerId,
         entries: 0,
         amount: 0,
         bonus: 0,
@@ -360,7 +375,7 @@ export default function ReferrerBonusPage() {
     const rowsForExport = buildExportRows(group);
 
     if (rowsForExport.length === 0) {
-      alert("No rows available to export.");
+      toast.warning("No rows available to export.");
       return;
     }
 
@@ -535,7 +550,7 @@ export default function ReferrerBonusPage() {
 
     const popup = window.open("", "_blank", "width=1000,height=780");
     if (!popup) {
-      alert("Your browser blocked the export preview window. Please allow popups and try again.");
+      toast.warning("Your browser blocked the export preview window. Please allow popups and try again.");
       return;
     }
 
@@ -548,70 +563,8 @@ export default function ReferrerBonusPage() {
     } catch (error) {
       console.error("Failed to render export preview", error);
       popup.close();
-      alert("Could not open the PDF export. Please try again or use the Print button.");
+      toast.error("Could not open the PDF export. Please try again or use the Print button.");
     }
-  };
-
-  const handlePrintReferrer = (group: any) => {
-    const popup = window.open("", "_blank", "width=900,height=700,noopener,noreferrer");
-    if (!popup) return;
-
-    const rowsHtml = (group.tests || [])
-      .map(
-        (entry: any) =>
-          `<tr>
-            <td>${entry.patient}</td>
-            <td>${entry.test}</td>
-            <td>${entry.date}</td>
-            <td style="text-align:right;">${formatCurrency(entry.amount)}</td>
-            <td style="text-align:right;">${formatCurrency(entry.bonus)}</td>
-            <td style="text-align:right; text-transform: capitalize;">${entry.status}</td>
-          </tr>`
-      )
-      .join("");
-
-    const html = `<!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Referrer Bonus Report</title>
-          <style>
-            body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #0f172a; }
-            h1 { margin: 0 0 8px; }
-            p { margin: 4px 0; }
-            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-            th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 13px; }
-            th { background: #f8fafc; text-align: left; }
-          </style>
-        </head>
-        <body>
-          <h1>Referrer Bonus Report</h1>
-          <p><strong>Referrer:</strong> ${group.referrer}</p>
-          <p><strong>Entries:</strong> ${group.entries}</p>
-          <p><strong>Amount:</strong> ${formatCurrency(group.amount)}</p>
-          <p><strong>Bonus:</strong> ${formatCurrency(group.bonus)}</p>
-          <p><strong>Pending/Paid:</strong> ${group.pendingCount}/${group.paidCount}</p>
-          <table>
-            <thead>
-              <tr>
-                <th>Patient</th>
-                <th>Test</th>
-                <th>Date</th>
-                <th style="text-align:right;">Amount</th>
-                <th style="text-align:right;">Bonus</th>
-                <th style="text-align:right;">Status</th>
-              </tr>
-            </thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-        </body>
-      </html>`;
-
-    popup.document.open();
-    popup.document.write(html);
-    popup.document.close();
-    popup.focus();
-    window.setTimeout(() => popup.print(), 250);
   };
 
   const handleEmailReferrer = (group: any) => {
@@ -624,7 +577,7 @@ export default function ReferrerBonusPage() {
     const matched = rows.find((row) => referrerName(row.referrer).toLowerCase() === String(group.referrer).toLowerCase());
     const phone = normalizeWhatsappPhone(referrerPhone(matched?.referrer));
     if (!phone) {
-      alert("No phone number found for this referrer.");
+      toast.warning("No phone number found for this referrer.");
       return;
     }
 
@@ -652,7 +605,7 @@ export default function ReferrerBonusPage() {
 
     const parsedValue = Number(bonusDraft);
     if (!Number.isFinite(parsedValue) || parsedValue < 0) {
-      alert("Bonus must be a valid non-negative number.");
+      toast.warning("Bonus must be a valid non-negative number.");
       return;
     }
 
@@ -682,9 +635,88 @@ export default function ReferrerBonusPage() {
       );
       setBonusEditor(null);
     } catch (err: any) {
-      alert(err?.message || "Failed to update bonus.");
+      toast.error(err?.message || "Failed to update bonus.");
     } finally {
       setUpdatingBonusKey((current) => (current === key ? null : current));
+    }
+  };
+
+  const recalculatePendingBonuses = async () => {
+    if (!branchId || recalculatingPending) return;
+    const percentage = Number(recalculatePercentageDraft);
+    if (!recalculatePercentageDraft.trim() || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+      setRecalculateError("Enter a percentage between 0 and 100.");
+      return;
+    }
+
+    setRecalculateError("");
+    setRecalculatingPending(true);
+    try {
+      const res = await fetch("/api/referral-ledger", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "recalculatePending",
+          branchId,
+          percentage,
+          referrerId: recalculateReferrer?.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to recalculate pending bonuses");
+
+      const refreshedRows = await fetchReferralLedger(branchId, fromDate, toDate);
+      setRows(Array.isArray(refreshedRows) ? refreshedRows : []);
+      setShowRecalculateModal(false);
+      setRecalculateReferrer(null);
+      const target = recalculateReferrer ? ` for ${recalculateReferrer.name}` : "";
+      toast.success(`Updated ${data.updatedCount} pending entries${target} to ${percentage}%.`);
+    } catch (err: any) {
+      setRecalculateError(err?.message || "Failed to recalculate pending bonuses.");
+    } finally {
+      setRecalculatingPending(false);
+    }
+  };
+
+  const updateReferrerPendingStatus = async (group: { referrerId: string; referrer: string }) => {
+    if (!branchId || !group.referrerId || updatingReferrerId) return;
+
+    const ledgerIds = rows
+      .filter((row) => {
+        const rowReferrerId = typeof row.referrer === "string" ? row.referrer : String(row.referrer?._id || "");
+        return rowReferrerId === group.referrerId && row.status === "pending";
+      })
+      .map((row) => row._id);
+
+    if (ledgerIds.length === 0) {
+      toast.info(`No fetched pending entries for ${group.referrer}.`);
+      return;
+    }
+
+    setUpdatingReferrerId(group.referrerId);
+    try {
+      const res = await fetch("/api/referral-ledger", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "markReferrerPendingPaid",
+          branchId,
+          referrerId: group.referrerId,
+          ledgerIds,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to update referral status");
+
+      const updatedIds = new Set<string>(data.updatedLedgerIds || []);
+      setRows((currentRows) => currentRows.map((row) =>
+        updatedIds.has(row._id) ? { ...row, status: "paid" } : row
+      ));
+      toast.success(`${data.updatedCount} pending entr${data.updatedCount === 1 ? "y" : "ies"} for ${group.referrer} marked paid.`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update referral status.");
+    } finally {
+      setUpdatingReferrerId((current) => current === group.referrerId ? null : current);
     }
   };
 
@@ -719,6 +751,61 @@ export default function ReferrerBonusPage() {
   return (
     <div className={pageTheme.shell}>
       <section className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
+        {showRecalculateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+            <div className={`w-full max-w-md rounded-xl border ${isDarkMode ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"} p-5 shadow-2xl`}>
+              <h2 className={`text-lg font-bold ${pageTheme.heading}`}>
+                {recalculateReferrer ? `Recalculate pending bonuses for ${recalculateReferrer.name}` : "Recalculate pending bonuses"}
+              </h2>
+              <p className={`mt-2 text-sm ${pageTheme.mutedText}`}>
+                This percentage will apply to all pending, non-cancelled entries {recalculateReferrer ? `for ${recalculateReferrer.name}` : "in this branch"} across all dates. Paid and cancelled entries will not change.
+              </p>
+              <label className={`mt-4 flex flex-col text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                Bonus percentage
+                <div className="relative mt-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    value={recalculatePercentageDraft}
+                    onChange={(event) => {
+                      setRecalculatePercentageDraft(event.target.value);
+                      setRecalculateError("");
+                    }}
+                    className={`${pageTheme.input} w-full pr-9`}
+                    autoFocus
+                  />
+                  <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${pageTheme.mutedText}`}>%</span>
+                </div>
+              </label>
+              {recalculateError && <p className="mt-2 text-sm text-red-600">{recalculateError}</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRecalculateModal(false);
+                    setRecalculateReferrer(null);
+                    setRecalculateError("");
+                  }}
+                  disabled={recalculatingPending}
+                  className={pageTheme.button}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={recalculatePendingBonuses}
+                  disabled={recalculatingPending}
+                  className={`${pageTheme.button} ${recalculatingPending ? "cursor-not-allowed opacity-60" : ""}`}
+                >
+                  {recalculatingPending ? "Applying..." : "Apply percentage"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {bonusEditor && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
             <div className={`w-full max-w-lg rounded-2xl border ${isDarkMode ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"} p-5 shadow-2xl`}>
@@ -854,6 +941,30 @@ export default function ReferrerBonusPage() {
               >
                 Today
               </button>
+              <label className={`flex flex-col text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                Status
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value as "all" | "pending" | "paid")}
+                  className={pageTheme.input}
+                >
+                  <option value="all">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setRecalculateError("");
+                  setRecalculateReferrer(null);
+                  setShowRecalculateModal(true);
+                }}
+                disabled={!branchId || recalculatingPending}
+                className={`${pageTheme.button} ${recalculatingPending ? "cursor-not-allowed opacity-60" : ""}`}
+              >
+                Recalculate all pending
+              </button>
             </div>
           </div>
 
@@ -887,7 +998,7 @@ export default function ReferrerBonusPage() {
           ) : (
             <div className="space-y-4 p-4">
               {groupedRows.map((group) => (
-                <div key={group.referrer} className={`overflow-hidden rounded-xl ${isDarkMode ? "border border-slate-800" : "border border-slate-200"}`}>
+                <div key={group.referrerId || group.referrer} className={`overflow-hidden rounded-xl ${isDarkMode ? "border border-slate-800" : "border border-slate-200"}`}>
                   <div className={pageTheme.sectionHeader}>
                     <div>
                       <div className={`text-sm font-semibold uppercase tracking-wide ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Referrer</div>
@@ -914,6 +1025,18 @@ export default function ReferrerBonusPage() {
                       </div>
 
                       <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRecalculateError("");
+                            setRecalculateReferrer({ id: group.referrerId, name: group.referrer });
+                            setShowRecalculateModal(true);
+                          }}
+                          disabled={!group.referrerId || recalculatingPending}
+                          className={`${pageTheme.button} ${!group.referrerId || recalculatingPending ? "cursor-not-allowed opacity-60" : ""}`}
+                        >
+                          Recalculate pending
+                        </button>
                         <label className={`flex items-center gap-2 text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
                           <span>Format</span>
                           <select
@@ -935,10 +1058,11 @@ export default function ReferrerBonusPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handlePrintReferrer(group)}
-                          className={pageTheme.button}
+                          onClick={() => updateReferrerPendingStatus(group)}
+                          disabled={!group.referrerId || group.pendingCount === 0 || updatingReferrerId === group.referrerId}
+                          className={`${pageTheme.button} ${!group.referrerId || group.pendingCount === 0 || updatingReferrerId === group.referrerId ? "cursor-not-allowed opacity-60" : ""}`}
                         >
-                          Print
+                          {updatingReferrerId === group.referrerId ? "Updating status..." : "Mark pending as paid"}
                         </button>
                         <button
                           type="button"

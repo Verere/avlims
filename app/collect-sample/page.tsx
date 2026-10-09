@@ -1,11 +1,12 @@
 "use client";
 import { useState, useRef } from "react";
+import { toast } from "react-toastify";
 
 // Dummy function for barcode scanning (replace with real scanner/camera integration)
 function useBarcodeScanner(onScan: (code: string) => void) {
   // In production, integrate with a camera or hardware scanner
   return {
-    start: () => alert("Camera scanning not implemented in this demo."),
+    start: () => toast.info("Camera scanning not implemented in this demo."),
   };
 }
 
