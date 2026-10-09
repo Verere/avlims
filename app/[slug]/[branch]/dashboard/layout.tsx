@@ -8,6 +8,7 @@ import { useTheme } from "../../../../components/ThemeProvider";
 export default function Layout({ children, params }: { children: React.ReactNode; params: Promise<{ slug: string; branch: string }> }) {
   const { slug, branch } = use(params);
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lab, setLab] = useState<any>(null);
   const [branchDoc, setBranchDoc] = useState<any>(null);
   const { isDarkMode, toggleTheme } = useTheme();
@@ -27,31 +28,41 @@ export default function Layout({ children, params }: { children: React.ReactNode
   }, [slug, branch]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} slug={slug} branch={branch} lab={lab} branchDoc={branchDoc} />
-      <div className={collapsed ? "flex-1 ml-20" : "flex-1 ml-56"}>
+    <div className="min-h-screen min-w-0 bg-gray-50">
+      <Sidebar
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((c) => !c)}
+        mobileOpen={mobileMenuOpen}
+        onMobileClose={() => setMobileMenuOpen(false)}
+        slug={slug}
+        branch={branch}
+        lab={lab}
+        branchDoc={branchDoc}
+      />
+      <div className={collapsed ? "min-h-screen min-w-0 md:ml-20" : "min-h-screen min-w-0 md:ml-56"}>
         {/* Custom Dashboard Navbar */}
-        <nav className="bg-white shadow sticky top-0 z-40 flex items-center justify-between px-6 h-16">
-          <div className="flex items-center gap-3" onClick={() => window.location.href = `/${slug}/${branch}/`}>
+        <nav className="sticky top-0 z-40 flex h-16 min-w-0 items-center justify-between gap-2 bg-white px-3 shadow sm:gap-4 sm:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open navigation menu"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-blue-700 md:hidden"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
             {/* Lab Logo */}
-            <img src={lab?.logo || "/lims.png"}  alt="Lab Logo" className="h-10 w-10 rounded-full object-cover border" />
+            <a href={`/${slug}/${branch}/`} aria-label="Go to branch home" className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <img src={lab?.logo || "/lims.png"} alt="Lab Logo" className="h-9 w-9 shrink-0 rounded-full border object-cover sm:h-10 sm:w-10" />
             {/* Lab Name & Branch */}
-            <div>
-              <div className="font-bold text-blue-700 text-lg">{lab?.name || "Lab Name"}</div>
-              <div className="text-xs text-gray-500">{branchDoc?.branch || "Branch"}</div>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-bold text-blue-700 sm:text-lg">{lab?.name || "Lab Name"}</div>
+              <div className="truncate text-xs text-gray-500">{branchDoc?.branch || "Branch"}</div>
             </div>
+            </a>
           </div>
-         
-          <div className="flex items-center gap-4">
-            <div className="relative hidden sm:block">
-              {/* <input
-                type="text"
-                placeholder="Search..."
-                className="rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 bg-gray-50"
-                aria-label="Search"
-              />
-              <svg className="absolute right-2 top-2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg> */}
-            </div>
+
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
             <button
               type="button"
               onClick={toggleTheme}
@@ -62,24 +73,21 @@ export default function Layout({ children, params }: { children: React.ReactNode
               {isDarkMode ? <HiSun className="h-5 w-5 text-amber-400" /> : <HiMoon className="h-5 w-5 text-blue-700" />}
             </button>
             {/* Notification Icon */}
-            <button className="relative p-2 rounded-full hover:bg-blue-50 focus:outline-none">
+            <button aria-label="Notifications" className="relative hidden rounded-full p-2 hover:bg-blue-50 focus:outline-none sm:inline-flex">
               <svg className="w-6 h-6 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
               <span className="absolute top-1 right-1 bg-red-500 text-white rounded-full text-xs px-1">3</span>
             </button>
             {/* User Profile */}
-            <div className="flex items-center gap-2 cursor-pointer">
-          <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200" aria-haspopup="true" aria-expanded="false">
-            <img src="/avatar.png" alt="User avatar" className="w-8 h-8 rounded-full border" />
-            <span className="hidden md:inline text-sm font-medium text-gray-700">Admin</span>
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
-          </button>
-       
-        </div>
+            <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200" aria-label="User profile" aria-haspopup="menu">
+              <img src="/avatar.png" alt="" className="h-8 w-8 rounded-full border" />
+              <span className="hidden text-sm font-medium text-gray-700 lg:inline">Admin</span>
+              <svg className="hidden h-4 w-4 text-gray-400 sm:block" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </button>
           </div>
         </nav>
-        <main>{children}</main>
+        <main className="min-w-0 w-full">{children}</main>
       </div>
     </div>
   );

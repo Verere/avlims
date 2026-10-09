@@ -3,6 +3,7 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useActionState } from "react";
 import { resetPasswordAction } from "./actions";
+import Link from "next/link";
 
 type ResetPasswordState = {
   success: boolean;
@@ -65,7 +66,18 @@ function ResetPasswordPageContent() {
         <input type="hidden" name="token" value={token} />
         {!token && <div className="text-red-500 text-sm text-center">Invalid or missing token.</div>}
         {clientError && <div className="text-red-500 text-sm text-center">{clientError}</div>}
-        {state.error && <div className="text-red-500 text-sm text-center">{state.error}</div>}
+        {state.error && (
+          <div className="text-red-500 text-sm text-center">
+            {state.error}
+            {state.error.toLowerCase().includes("invalid or expired token") && (
+              <div className="mt-2">
+                <Link href="/forgot-password" className="font-medium text-blue-600 hover:underline">
+                  Request a new reset link
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
         {state.success && <div className="text-green-600 text-sm text-center">Password reset! You can now <a href='/login' className='text-blue-600 hover:underline'>log in</a>.</div>}
         {!state.success && token && <>
           <input

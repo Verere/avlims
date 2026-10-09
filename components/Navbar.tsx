@@ -78,10 +78,10 @@ const [open, setOpen] = useState(false);
 
   return (
     <nav className="bg-white shadow sticky top-0 z-40">
-      <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14">
+      <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-3 px-3 sm:px-4">
         <div className="flex items-center gap-2">
           {/* <Image src="/logo.svg" alt="App Logo" width={48} height={48} className="mb-2" /> */}
-        <svg width="320" height="80" viewBox="0 0 320 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg className="h-10 w-36 shrink-0 sm:w-44" width="320" height="80" viewBox="0 0 320 80" fill="none" xmlns="http://www.w3.org/2000/svg">
   <g>
     <circle cx="32" cy="40" r="24" fill="url(#grad1)" />
     <path d="M32 20 L44 60 L20 60 Z" fill="white" opacity="0.95"/>
@@ -105,7 +105,7 @@ const [open, setOpen] = useState(false);
 </svg>
           
         </div>
-        <div className="hidden md:flex gap-6">
+        <div className="hidden min-w-0 flex-1 items-center justify-end gap-3 xl:flex 2xl:gap-5">
           {displayedNavLinks.map(link => (
             <Link
               key={link.href}
@@ -128,9 +128,10 @@ const [open, setOpen] = useState(false);
             {isDarkMode ? <HiSun className="h-5 w-5 text-amber-400" /> : <HiMoon className="h-5 w-5" />}
           </button>
           <button
-            className="md:hidden flex items-center px-2 py-1 border rounded text-blue-700 border-blue-700"
+            className="inline-flex shrink-0 items-center rounded border border-blue-700 px-2 py-1 text-blue-700 xl:hidden"
             onClick={() => setOpen(o => !o)}
             aria-label="Toggle menu"
+            aria-expanded={open}
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -140,7 +141,7 @@ const [open, setOpen] = useState(false);
       </div>
       {/* Mobile menu */}
       {open && (
-        <div className="md:hidden bg-white border-t shadow px-4 pb-4">
+        <div className="max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-t bg-white px-4 pb-4 shadow xl:hidden">
           {displayedNavLinks.map(link => (
             <Link
               key={link.href}

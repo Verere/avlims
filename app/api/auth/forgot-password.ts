@@ -5,11 +5,9 @@ import { buildAppUrl, sendMail } from "@/lib/email";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
-    console.log('fg')
   try {
     const body = await req.json();
-    console.log('Forgot password request body:', body);
-    const { email } = body;
+    const email = String(body?.email || '').trim().toLowerCase();
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
@@ -21,12 +19,12 @@ export async function POST(req: NextRequest) {
     }
     // Generate reset token
     const token = crypto.randomBytes(32).toString("hex");
-    const tokenExpiry = Date.now() + 1000 * 60 * 60; // 1 hour
+    const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     user.passwordResetToken = token;
     user.passwordResetExpiry = tokenExpiry;
     await user.save();
     // Send email
-    const resetUrl = buildAppUrl(`/reset-password?token=${token}`);
+    const resetUrl = buildAppUrl(`/reset-password?token=${encodeURIComponent(token)}`);
     await sendMail({
       to: email,
       subject: "Password Reset Request",

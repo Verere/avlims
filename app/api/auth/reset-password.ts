@@ -7,14 +7,16 @@ import { hashPassword } from "@/lib/auth";
 export async function POST(req: NextRequest) {
   try {
     const { token, password } = await req.json();
-    console.log('Reset password request:', { token, passwordLength: password?.length });
-    if (!token || !password || password.length < 6) {
+    const normalizedToken = String(token || '').trim();
+    if (!normalizedToken || typeof password !== 'string' || password.length < 6) {
       return NextResponse.json({ error: "Invalid request." }, { status: 400 });
     }
     await dbConnect();
-    const user = await User.findOne({ passwordResetToken: token });
-    console.log('User found for token:', user ? user.email : null, 'Expiry:', user?.passwordResetExpiry, 'Now:', Date.now());
-    if (!user || !user.passwordResetExpiry || user.passwordResetExpiry.getTime() < Date.now()) {
+    const user = await User.findOne({
+      passwordResetToken: normalizedToken,
+      passwordResetExpiry: { $gt: new Date() },
+    });
+    if (!user || !user.passwordResetExpiry || Number.isNaN(new Date(user.passwordResetExpiry).getTime())) {
       return NextResponse.json({ error: "Invalid or expired token." }, { status: 400 });
     }
 

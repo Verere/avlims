@@ -13,7 +13,7 @@ export async function resetPasswordAction(
   formData: FormData
 ): Promise<ResetPasswordState> {
   try {
-    const token = String(formData.get("token") ?? "");
+    const token = String(formData.get("token") ?? "").trim();
     const password = String(formData.get("password") ?? "");
 
     if (!token || !password || password.length < 6) {
@@ -27,12 +27,13 @@ export async function resetPasswordAction(
 
     const user = await User.findOne({
       passwordResetToken: token,
+      passwordResetExpiry: { $gt: new Date() },
     });
 
     if (
       !user ||
       !user.passwordResetExpiry ||
-      user.passwordResetExpiry.getTime() < Date.now()
+      Number.isNaN(new Date(user.passwordResetExpiry).getTime())
     ) {
       return {
         success: false,

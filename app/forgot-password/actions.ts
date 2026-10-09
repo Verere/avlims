@@ -15,7 +15,7 @@ export async function forgotPasswordAction(
   formData: FormData
 ): Promise<ForgotPasswordState> {
   try {
-    const email = String(formData.get("email") ?? "");
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
 
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return {
@@ -36,14 +36,14 @@ export async function forgotPasswordAction(
     }
 
     const token = crypto.randomBytes(32).toString("hex");
-    const tokenExpiry = Date.now() + 1000 * 60 * 60;
+    const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     user.passwordResetToken = token;
     user.passwordResetExpiry = tokenExpiry;
 
     await user.save();
 
-    const resetUrl = buildAppUrl(`/reset-password?token=${token}`);
+    const resetUrl = buildAppUrl(`/reset-password?token=${encodeURIComponent(token)}`);
 
     await sendMail({
       to: email,

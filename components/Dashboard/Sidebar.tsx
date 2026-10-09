@@ -74,6 +74,8 @@ function buildNavItems(slug: string, branch: string) {
 type SidebarProps = {
   collapsed: boolean;
   onToggle: () => void;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
   slug: string;
   branch: string;
   lab?: any;        // refine later if you want
@@ -81,30 +83,36 @@ type SidebarProps = {
   labLogoUrl?: string; // refine later if you want
 };
 
-export default function Sidebar({ collapsed, onToggle, slug, branch, lab, branchDoc, labLogoUrl }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose, slug, branch, lab, branchDoc, labLogoUrl }: SidebarProps) {
   const navItems = buildNavItems(slug, branch);
   const [openSubNav, setOpenSubNav] = useState<string | null>(null);
   const activeHref = navItems[0]?.href;
+  const widthClass = collapsed ? "w-64 md:w-20" : "w-64 md:w-56";
 
   const handleSubNavToggle = (href: string) => {
     setOpenSubNav(prev => (prev === href ? null : href));
   };
 
   return (
-    <aside
-      className={`bg-white shadow-md h-screen fixed top-0 left-0 z-30 flex flex-col transition-all duration-300 ${collapsed ? 'w-20' : 'w-56'}`}
-      aria-label="Sidebar"
-      style={{ maxHeight: '100vh' }}
-    >
-      <div className="flex items-center justify-between h-16 px-4 border-b">
-        <span className="font-bold text-blue-700 text-xl">{collapsed ? '' : 
-          <div className="flex items-center gap-2">
-            {/* If lab logo is available, render it here. Otherwise, show project logo SVG. */}
-            {/* TODO: Replace 'labLogoUrl' with actual lab logo prop or state if available */}
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          className="fixed inset-0 z-40 bg-slate-950/40 md:hidden"
+          onClick={onMobileClose}
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex h-dvh max-h-screen flex-col bg-white shadow-md transition-transform duration-300 md:z-30 md:translate-x-0 ${widthClass} ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        aria-label="Sidebar"
+      >
+        <div className="flex h-16 min-w-0 items-center justify-between gap-2 border-b px-3 sm:px-4">
+          <div className={`flex min-w-0 items-center gap-2 ${collapsed ? "md:hidden" : ""}`}>
             {typeof labLogoUrl !== 'undefined' && labLogoUrl ? (
-              <img src={labLogoUrl} alt="Lab Logo" width={48} height={48} className="mb-2" />
+              <img src={labLogoUrl} alt="Lab Logo" width={48} height={48} className="h-10 w-10 shrink-0 object-contain" />
             ) : (
-              <svg width="150" height="80" viewBox="0 0 320 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg className="h-10 w-36 max-w-full shrink" width="150" height="80" viewBox="0 0 320 80" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <g>
                   <circle cx="32" cy="40" r="24" fill="url(#grad1)" />
                   <path d="M32 20 L44 60 L20 60 Z" fill="white" opacity="0.95"/>
@@ -128,41 +136,46 @@ export default function Sidebar({ collapsed, onToggle, slug, branch, lab, branch
               </svg>
             )}
           </div>
-        }</span>
-        <button
-          className="p-2 rounded hover:bg-gray-100 focus:outline-none"
-          onClick={onToggle}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {/* Sidebar collapse/expand icon: left arrow when expanded, right arrow when collapsed */}
-          {collapsed ? (
-            // Expand icon (right arrow)
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-          ) : (
-            // Collapse icon (left arrow)
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-          )}
-        </button>
-      </div>
-      <nav className="flex-1 py-4 flex flex-col gap-1 overflow-y-auto">
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              className="hidden rounded p-2 hover:bg-gray-100 focus:outline-none md:block"
+              onClick={onToggle}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? (
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+              ) : (
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+              )}
+            </button>
+            <button type="button" className="rounded p-2 hover:bg-gray-100 md:hidden" onClick={onMobileClose} aria-label="Close navigation menu">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+        </div>
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto py-4">
         {navItems.map(item => (
           <div key={item.href} className="w-full">
             <div className="flex items-center">
               <Link
                 href={item.href}
-                onClick={item.label === "Settings" ? (event) => {
-                  event.preventDefault();
-                  window.location.assign(item.href);
-                } : undefined}
-                className={`flex items-center gap-3 px-4 py-2 rounded-lg font-medium transition-all group focus:outline-none focus:ring-2 focus:ring-blue-200 ${activeHref === item.href ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                className={`flex min-w-0 items-center gap-3 px-4 py-2 rounded-lg font-medium transition-all group focus:outline-none focus:ring-2 focus:ring-blue-200 ${activeHref === item.href ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                onClick={(event) => {
+                  onMobileClose();
+                  if (item.label === "Settings") {
+                    event.preventDefault();
+                    window.location.assign(item.href);
+                  }
+                }}
                 tabIndex={0}
                 aria-current={activeHref === item.href ? 'page' : undefined}
               >
                 <span className="text-xl">{item.icon}</span>
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                <span className={`truncate ${collapsed ? "md:hidden" : ""}`}>{item.label}</span>
               </Link>
               {/* Show collapse/expand icon if subNav exists and sidebar is expanded */}
-              {!collapsed && item.subNav && (
+              {(!collapsed || mobileOpen) && item.subNav && (
                 <button
                   className="ml-auto p-1 focus:outline-none"
                   onClick={() => handleSubNavToggle(item.href)}
@@ -182,12 +195,13 @@ export default function Sidebar({ collapsed, onToggle, slug, branch, lab, branch
               )}
             </div>
             {/* Render subNav if present, sidebar is expanded, and this subNav is open */}
-            {!collapsed && item.subNav && openSubNav === item.href && (
+            {(!collapsed || mobileOpen) && item.subNav && openSubNav === item.href && (
               <div className="ml-10 flex flex-col gap-1 mt-1">
                 {item.subNav.map(sub => (
                   <Link
                     key={sub.href}
                     href={sub.href}
+                    onClick={onMobileClose}
                     className="flex items-center text-sm text-gray-600 hover:text-blue-700 py-1 px-2 rounded transition-all"
                   >
                     {sub.icon && <span className="mr-2">{sub.icon}</span>}
@@ -198,7 +212,8 @@ export default function Sidebar({ collapsed, onToggle, slug, branch, lab, branch
             )}
           </div>
         ))}
-      </nav>
-    </aside>
+        </nav>
+      </aside>
+    </>
   );
 }
