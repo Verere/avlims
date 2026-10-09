@@ -13,7 +13,8 @@ export default function AddUserPage() {
   const { isDarkMode } = useTheme();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"active" | "inactive">("active");
+  const [role, setRole] = useState("staff");
+  const [permissions, setPermissions] = useState<string[]>(["dashboard:access"]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -41,7 +42,8 @@ export default function AddUserPage() {
   const resetForm = () => {
     setName("");
     setEmail("");
-    setStatus("active");
+    setRole("staff");
+    setPermissions(["dashboard:access"]);
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -58,6 +60,10 @@ export default function AddUserPage() {
       setError("Email is required");
       return;
     }
+    if (permissions.length === 0) {
+      setError("Select at least one permission");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -67,7 +73,8 @@ export default function AddUserPage() {
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim().toLowerCase(),
-          status,
+          role,
+          permissions,
           labSlug,
           branchSlug,
         }),
@@ -78,7 +85,7 @@ export default function AddUserPage() {
         throw new Error(payload?.error || "Failed to create user");
       }
 
-      setSuccess(`User created and verification email sent to ${email.trim().toLowerCase()}.`);
+      setSuccess(`Invitation sent to ${email.trim().toLowerCase()}. They can set a password and activate the account from the email link.`);
       resetForm();
     } catch (err: any) {
       setError(err?.message || "Failed to create user");
@@ -134,17 +141,33 @@ export default function AddUserPage() {
               />
             </div>
 
-            {/* <div>
-              <label className={`text-sm font-medium ${isDarkMode ? "text-slate-200" : "text-slate-700"}`}>Status</label>
+            <div>
+              <label className={`text-sm font-medium ${isDarkMode ? "text-slate-200" : "text-slate-700"}`}>Role</label>
               <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as "active" | "inactive")}
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
                 className={`w-full ${pageTheme.input}`}
               >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="staff">Staff</option>
+                <option value="technician">Technician</option>
+                <option value="receptionist">Receptionist</option>
+                <option value="cashier">Cashier</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
               </select>
-            </div> */}
+            </div>
+
+            <fieldset className={`rounded-lg border p-3 ${isDarkMode ? "border-slate-700" : "border-slate-200"}`}>
+              <legend className={`px-1 text-sm font-medium ${isDarkMode ? "text-slate-200" : "text-slate-700"}`}>Permissions</legend>
+              <label className={`flex items-center gap-2 text-sm ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                <input
+                  type="checkbox"
+                  checked={permissions.includes("dashboard:access")}
+                  onChange={(event) => setPermissions(event.target.checked ? ["dashboard:access"] : [])}
+                />
+                Dashboard access
+              </label>
+            </fieldset>
 
             <div className="flex flex-wrap gap-2 pt-2">
               <button type="submit" disabled={submitting} className={pageTheme.buttonPrimary}>
@@ -154,7 +177,6 @@ export default function AddUserPage() {
                 Back to Users
               </Link>
             </div>
-            <input type="hidden" name="status" value="inactive" />
           </form>
         </div>
       </section>

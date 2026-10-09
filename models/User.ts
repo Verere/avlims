@@ -15,6 +15,7 @@ export interface IUser extends Document {
   invitedLabId?: Types.ObjectId;
   invitedBranchId?: Types.ObjectId;
   invitedLabSlug?: string;
+  invitedBranchSlug?: string;
   invitedBranchName?: string;
   invitedLabName?: string;
   invitedRole?: string;
@@ -40,6 +41,7 @@ const UserSchema = new Schema<IUser>({
   invitedLabId: { type: Schema.Types.ObjectId, ref: 'Lab' },
   invitedBranchId: { type: Schema.Types.ObjectId, ref: 'Branch' },
   invitedLabSlug: { type: String },
+  invitedBranchSlug: { type: String },
   invitedBranchName: { type: String },
   invitedLabName: { type: String },
   invitedRole: { type: String },
@@ -65,6 +67,9 @@ if (existingModel) {
   // Patch cached model schema during dev/hot-reload so username is not dropped.
   if (!existingModel.schema.path('username')) {
     existingModel.schema.add({ username: { type: String, unique: true, sparse: true } });
+  }
+  if (!existingModel.schema.path('invitedBranchSlug')) {
+    existingModel.schema.add({ invitedBranchSlug: { type: String } });
   }
 
   if (!(existingModel.schema as any)._usernamePreValidatePatched) {

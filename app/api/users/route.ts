@@ -16,7 +16,8 @@ function buildInviteEmailHtml(name: string, inviteUrl: string, inviteLabContext:
     <p>Hello ${name},</p>
     <p>You have been invited to access the LIMS platform.</p>
     ${inviteLabContext ? `<p>Lab: <strong>${inviteLabContext.invitedLabName}</strong> | Branch: <strong>${inviteLabContext.invitedBranchName}</strong></p>` : ''}
-    <p>Click the link below to accept the invite and verify your account:</p>
+    ${inviteLabContext ? `<p>Role: <strong>${inviteLabContext.invitedRole}</strong></p>` : ''}
+    <p>Click the link below to verify your email, choose your password, and activate your account:</p>
     <p><a href="${inviteUrl}">${inviteUrl}</a></p>
     <p>This link expires in 24 hours.</p>
   `;
@@ -53,6 +54,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const role = String(data.role || 'staff').trim().toLowerCase();
+    const validRoles = ['admin', 'manager', 'technician', 'cashier', 'receptionist', 'staff'];
+    if (!validRoles.includes(role)) {
+      return NextResponse.json({ error: 'Select a valid role for the invited user' }, { status: 400 });
+    }
+    if (Array.isArray(data.permissions) && data.permissions.length === 0) {
+      return NextResponse.json({ error: 'Select at least one permission' }, { status: 400 });
+    }
+    if (Array.isArray(data.permissions) && data.permissions.some((permission: unknown) => permission !== 'dashboard:access')) {
+      return NextResponse.json({ error: 'One or more permissions are invalid' }, { status: 400 });
+    }
+
     let inviteLabContext: any = null;
     if (data.labSlug && data.branchSlug) {
       const branchSlug = String(data.branchSlug);
@@ -79,9 +92,10 @@ export async function POST(req: NextRequest) {
         invitedLabId: labDoc._id,
         invitedBranchId: branchDoc._id,
         invitedLabSlug: labDoc.slug,
+        invitedBranchSlug: branchDoc.slug,
         invitedBranchName: branchDoc.branch,
         invitedLabName: labDoc.name,
-        invitedRole: String(data.role || 'staff'),
+        invitedRole: role,
         invitedPermissions: Array.isArray(data.permissions) && data.permissions.length > 0 ? data.permissions : ['dashboard:access'],
         invitedBy: labDoc.owner,
       };
@@ -100,6 +114,7 @@ export async function POST(req: NextRequest) {
         existingUser.invitedLabId = inviteLabContext.invitedLabId;
         existingUser.invitedBranchId = inviteLabContext.invitedBranchId;
         existingUser.invitedLabSlug = inviteLabContext.invitedLabSlug;
+        existingUser.invitedBranchSlug = inviteLabContext.invitedBranchSlug;
         existingUser.invitedBranchName = inviteLabContext.invitedBranchName;
         existingUser.invitedLabName = inviteLabContext.invitedLabName;
         existingUser.invitedRole = inviteLabContext.invitedRole;
@@ -141,7 +156,7 @@ export async function POST(req: NextRequest) {
       username: generatedUsername,
       email,
       password: hashedPassword,
-      status: data.status || 'active',
+      status: 'inactive',
       emailVerified: false,
       emailVerificationToken: verificationToken,
       emailVerificationExpires: verificationTokenExpiry,

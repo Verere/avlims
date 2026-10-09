@@ -33,6 +33,9 @@ export const authOptions: NextAuthOptions = {
         await dbConnect();
         const user = await User.findOne({ email: parsed.data.email });
         if (!user) throw new Error("Invalid credentials");
+        if (user.status !== "active" || user.emailVerified !== true) {
+          throw new Error("Verify your email and activate your account before signing in");
+        }
 
         const isMatch = await comparePassword(parsed.data.password, user.password);
         if (!isMatch) throw new Error("Invalid credentials");
