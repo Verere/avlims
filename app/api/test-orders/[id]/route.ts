@@ -6,6 +6,9 @@ import Bill from "@/models/Bill";
 import BillPayment from "@/models/BillPayment";
 import Payment from "@/models/Payment";
 import ReferralLedger from "@/models/ReferralLedger";
+import { getToken } from "next-auth/jwt";
+import Referrer from "@/models/Referrer";
+import Lab from "@/models/Lab";
 
 export async function GET(
   req: NextRequest,
@@ -56,6 +59,13 @@ export async function PATCH(
 
       const orderObjectId = new mongoose.Types.ObjectId(id);
       const orderIdMatchers = [orderObjectId, id];
+      const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      const cancelledBy = typeof token?.name === "string"
+        ? token.name
+        : typeof token?.email === "string"
+          ? token.email
+          : undefined;
+      const cancelledAt = new Date();
 
       const session = await mongoose.startSession();
       try {
@@ -68,7 +78,12 @@ export async function PATCH(
         await session.withTransaction(async () => {
           cancelledOrder = await Order.findByIdAndUpdate(
             id,
-            { isCancelled: true, status: "cancelled" },
+            { $set: {
+              isCancelled: true,
+              status: "cancelled",
+              cancelledAt,
+              ...(cancelledBy ? { cancelledBy } : {}),
+            } },
             { new: true, runValidators: true, session }
           ).lean();
 
@@ -128,6 +143,143 @@ export async function PATCH(
       }
     }
 
+    if (typeof update.referralId === "string" && update.referralId.trim()) {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return NextResponse.json({ error: "Invalid order id" }, { status: 400 });
+      }
+      if (!mongoose.Types.ObjectId.isValid(update.referralId)) {
+        return NextResponse.json({ error: "Invalid referrer id" }, { status: 400 });
+      }
+
+      const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      if (!token?.id) {
+        return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      }
+
+      const session = await mongoose.startSession();
+      let updatedOrder: unknown = null;
+      let ledgerCreated = false;
+      try {
+        await session.withTransaction(async () => {
+          const order = await Order.findById(id).session(session);
+          if (!order) throw new Error("ORDER_NOT_FOUND");
+          if (order.isCancelled) throw new Error("ORDER_CANCELLED");
+          if (!order.branchId || !mongoose.Types.ObjectId.isValid(order.branchId)) {
+            throw new Error("ORDER_BRANCH_MISSING");
+          }
+          if (!order.slug) throw new Error("ORDER_LAB_MISSING");
+
+          const referrer = await Referrer.findOne({
+            _id: update.referralId,
+            branchId: order.branchId,
+            isCancelled: { $ne: true },
+          }).session(session);
+          if (!referrer) throw new Error("REFERRER_NOT_FOUND");
+          const lab = await Lab.findOne({ slug: order.slug }).select("_id").session(session);
+          if (!lab) throw new Error("ORDER_LAB_NOT_FOUND");
+
+          order.referralId = String(referrer._id);
+          order.referral = referrer.name;
+          await order.save({ session });
+          updatedOrder = order.toObject();
+
+          const existingLedger = await ReferralLedger.findOne({ testOrder: order._id }).session(session);
+          if (existingLedger) {
+            existingLedger.referrer = referrer._id;
+            await existingLedger.save({ session });
+            return;
+          }
+
+          const ledgerTests: Array<{
+            testId: string;
+            testName: string;
+            panelId?: string;
+            panelName?: string;
+            quantity: number;
+            amount: number;
+            bonus: number;
+          }> = [];
+          const seenPanels = new Set<string>();
+          for (const item of Array.isArray(order.tests) ? order.tests : []) {
+            const panelId = String(item?.panel?.id || "");
+            if (panelId) {
+              if (seenPanels.has(panelId)) continue;
+              seenPanels.add(panelId);
+              ledgerTests.push({
+                testId: panelId,
+                testName: String(item.panel.name || item.name || "Panel"),
+                panelId,
+                panelName: String(item.panel.name || item.name || "Panel"),
+                quantity: 1,
+                amount: Number(item.panel.price || 0),
+                bonus: 0,
+              });
+              continue;
+            }
+
+            const testName = String(item?.name || "Test");
+            const quantity = Math.max(1, Number(item?.quantity || 1));
+            ledgerTests.push({
+              testId: String(item?.id || testName),
+              testName,
+              quantity,
+              amount: Number(item?.price || 0) * quantity,
+              bonus: 0,
+            });
+          }
+
+          const amount = Number(order.amount ?? ledgerTests.reduce((sum, test) => sum + test.amount, 0));
+          const bonus = Number(order.bonus || 0);
+          const testAmountTotal = ledgerTests.reduce((sum, test) => sum + test.amount, 0);
+          let allocatedBonus = 0;
+          ledgerTests.forEach((test, index) => {
+            if (index === ledgerTests.length - 1) {
+              test.bonus = Number((bonus - allocatedBonus).toFixed(2));
+            } else if (testAmountTotal > 0) {
+              test.bonus = Number((bonus * test.amount / testAmountTotal).toFixed(2));
+              allocatedBonus += test.bonus;
+            }
+          });
+
+          await ReferralLedger.create([{
+            lab: lab._id,
+            referrer: referrer._id,
+            testOrder: order._id,
+            tests: ledgerTests,
+            amount,
+            bonus,
+            status: "pending",
+            isCancelled: false,
+            user: String(token.id),
+            branchId: order.branchId,
+            businessDate: order.bDate,
+          }], { session });
+          ledgerCreated = true;
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const response = message === "ORDER_NOT_FOUND"
+          ? { error: "Order not found", status: 404 }
+          : message === "REFERRER_NOT_FOUND"
+            ? { error: "The selected referrer is unavailable for this branch", status: 404 }
+            : message === "ORDER_CANCELLED"
+              ? { error: "Cannot update the referrer on a cancelled order", status: 400 }
+              : message === "ORDER_BRANCH_MISSING" || message === "ORDER_LAB_MISSING" || message === "ORDER_LAB_NOT_FOUND"
+                ? { error: "Order branch or lab context is unavailable", status: 400 }
+                : { error: "Failed to update referrer and referral ledger", status: 500 };
+        return NextResponse.json({ error: response.error }, { status: response.status });
+      } finally {
+        await session.endSession();
+      }
+
+      return NextResponse.json({
+        success: true,
+        order: updatedOrder,
+        referralLedgerCreated: ledgerCreated,
+        referralLedgerUpdated: !ledgerCreated,
+      }, { status: 200 });
+    }
+
     if (Object.keys(update).length === 0) {
       return NextResponse.json(
         { error: "No valid update fields provided" },
@@ -149,27 +301,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const nextReferrerId =
-      typeof update.referralId === "string" && update.referralId.trim().length > 0
-        ? update.referralId
-        : typeof existingOrder.referralId === "string" && existingOrder.referralId.trim().length > 0
-          ? existingOrder.referralId
-          : null;
-
-    let referralLedgerCount = 0;
-    if (nextReferrerId && mongoose.Types.ObjectId.isValid(nextReferrerId)) {
-      const orderObjectId = new mongoose.Types.ObjectId(id);
-      const ledgerResult = await ReferralLedger.updateMany(
-        { testOrder: orderObjectId },
-        { $set: { referrer: nextReferrerId } }
-      );
-      referralLedgerCount = ledgerResult.modifiedCount || 0;
-    }
-
     return NextResponse.json({
       success: true,
       order: updated,
-      referralLedgerUpdated: referralLedgerCount,
     }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: "Failed to update order" }, { status: 500 });

@@ -94,6 +94,13 @@ function rowDate(row: LedgerRow) {
   });
 }
 
+function rowTimestamp(row: LedgerRow) {
+  const businessDate = row.businessDate ? new Date(row.businessDate).getTime() : Number.NaN;
+  if (Number.isFinite(businessDate)) return businessDate;
+  const createdAt = row.createdAt ? new Date(row.createdAt).getTime() : Number.NaN;
+  return Number.isFinite(createdAt) ? createdAt : Number.NEGATIVE_INFINITY;
+}
+
 async function fetchBranchBySlug(branchSlug: string) {
   const res = await fetch(`/api/branches/${branchSlug}`);
   if (!res.ok) throw new Error("Branch not found");
@@ -272,7 +279,7 @@ export default function ReferrerBonusPage() {
       const patient = patientName(row.testOrder).toLowerCase();
       const tests = (Array.isArray(row.tests) ? row.tests : []).map((test) => test.testName.toLowerCase());
       return [referrer, patient, ...tests].some((value) => value.includes(query));
-    });
+    }).sort((a, b) => rowTimestamp(b) - rowTimestamp(a));
   }, [rows, searchQuery, statusFilter]);
 
   const totals = useMemo(() => {
@@ -292,6 +299,7 @@ export default function ReferrerBonusPage() {
     const grouped = new Map<string, {
       referrer: string;
       referrerId: string;
+      latestDate: number;
       entries: number;
       amount: number;
       bonus: number;
@@ -319,6 +327,7 @@ export default function ReferrerBonusPage() {
       const current = grouped.get(refKey) || {
         referrer: refName,
         referrerId,
+        latestDate: Number.NEGATIVE_INFINITY,
         entries: 0,
         amount: 0,
         bonus: 0,
@@ -337,6 +346,7 @@ export default function ReferrerBonusPage() {
             bonus: Number(row.bonus || 0),
           }];
 
+      current.latestDate = Math.max(current.latestDate, rowTimestamp(row));
       rowTests.forEach((test, index) => {
         const testAmount = Number(test.amount || 0);
         const testBonus = Number(test.bonus || 0);
@@ -365,12 +375,7 @@ export default function ReferrerBonusPage() {
       grouped.set(refKey, current);
     }
 
-    return Array.from(grouped.values())
-      .map((g) => ({
-        ...g,
-        tests: g.tests.sort((a, b) => b.amount - a.amount),
-      }))
-      .sort((a, b) => b.amount - a.amount);
+    return Array.from(grouped.values()).sort((a, b) => b.latestDate - a.latestDate);
   }, [filteredRows]);
 
   const buildReferrerReportText = (group: any) => {

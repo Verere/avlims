@@ -21,6 +21,8 @@ export interface IOrder extends Document {
   slug?: string;
   bDate?: string;
   isCancelled?: boolean;
+  cancelledAt?: Date;
+  cancelledBy?: string;
   branch?: string;
   branchId?: string;
   revenue?: number;
@@ -53,6 +55,8 @@ const OrderSchema: Schema<IOrder> = new mongoose.Schema({
     type: String,
   },
   isCancelled:{type:Boolean, default:false},
+  cancelledAt: { type: Date },
+  cancelledBy: { type: String },
   branch: { type: String },
   branchId: { type: String },
   revenue: { type: Number, default: 0 },

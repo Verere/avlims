@@ -8,6 +8,14 @@ import Referrer from '@/models/Referrer';
 import Order from '@/models/Order';
 import AuditLog from '@/models/AuditLog';
 
+function nextDate(dateValue: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return null;
+  const date = new Date(`${dateValue}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== dateValue) return null;
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
 export async function GET(req: NextRequest) {
   await dbConnect();
   try {
@@ -32,25 +40,23 @@ export async function GET(req: NextRequest) {
 
     // Support both date-range (fromDate/toDate) and single-date (date) filtering
     if (fromDate && toDate) {
-      const start = new Date(`${fromDate}T00:00:00.000Z`);
-      const end = new Date(`${toDate}T23:59:59.999Z`);
-      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      const dayAfterToDate = nextDate(toDate);
+      if (!nextDate(fromDate) || !dayAfterToDate || fromDate > toDate) {
         return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, { status: 400 });
       }
-      filter.createdAt = { $gte: start, $lte: end };
+      filter.businessDate = { $gte: fromDate, $lt: dayAfterToDate };
     } else if (date) {
-      const start = new Date(`${date}T00:00:00.000Z`);
-      const end = new Date(`${date}T23:59:59.999Z`);
-      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      const dayAfterDate = nextDate(date);
+      if (!dayAfterDate) {
         return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, { status: 400 });
       }
-      filter.createdAt = { $gte: start, $lte: end };
+      filter.businessDate = { $gte: date, $lt: dayAfterDate };
     }
 
     const rows = await ReferralLedger.find(filter)
       .populate({ path: 'referrer', select: 'name phone', model: Referrer })
       .populate({ path: 'testOrder', select: 'name transId', model: Order })
-      .sort({ createdAt: -1 })
+      .sort({ businessDate: -1, createdAt: -1 })
       .lean();
 
     return NextResponse.json(rows, { status: 200 });

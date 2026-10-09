@@ -25,8 +25,49 @@ type AuditEvent = {
   createdAt: string;
 };
 
+type CancelledOrder = {
+  _id: string;
+  transId?: string;
+  patientId?: string;
+  name?: string;
+  gender?: string;
+  tests?: unknown[];
+  amount?: number;
+  amountPaid?: number;
+  bal?: number;
+  referral?: string;
+  user?: string;
+  bDate?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  createdAt?: string;
+};
+
 function formatLabel(value: string) {
   return value.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
+function formatCurrency(value: unknown) {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0);
+}
+
+function formatOrderTests(tests: unknown[] = []) {
+  return tests.map((test) => {
+    if (typeof test === "string") return test;
+    if (!test || typeof test !== "object") return "Test";
+
+    const item = test as Record<string, unknown>;
+    const panel = item.panel && typeof item.panel === "object"
+      ? String((item.panel as Record<string, unknown>).name || "")
+      : "";
+    const name = String(item.name || item.testName || "Test");
+    const quantity = Math.max(1, Number(item.quantity) || 1);
+    return `${panel ? `${panel}: ` : ""}${name}${quantity > 1 ? ` × ${quantity}` : ""}`;
+  });
 }
 
 function getEventSummary(event: AuditEvent) {
@@ -49,6 +90,9 @@ export default function AuditLogPanel({ memberships }: { memberships: Membership
   const [membershipId, setMembershipId] = useState(memberships[0]?._id || "");
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [error, setError] = useState("");
+  const [cancelledOrders, setCancelledOrders] = useState<CancelledOrder[]>([]);
+  const [cancelledOrdersLoading, setCancelledOrdersLoading] = useState(false);
+  const [cancelledOrdersError, setCancelledOrdersError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
   const [entityFilter, setEntityFilter] = useState("all");
@@ -69,18 +113,37 @@ export default function AuditLogPanel({ memberships }: { memberships: Membership
     if (!selectedMembership) return;
 
     let cancelled = false;
-    setError("");
-    fetch(`/api/audit-logs?labId=${selectedMembership.labId}&branchId=${selectedMembership.branchId}`)
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Unable to load audit log");
-        return response.json();
-      })
-      .then((data) => {
-        if (!cancelled) setEvents(data);
-      })
-      .catch((loadError) => {
-        if (!cancelled) setError(loadError.message);
-      });
+    const query = new URLSearchParams({
+      labId: selectedMembership.labId,
+      branchId: selectedMembership.branchId,
+      includeCancelledOrders: "true",
+    });
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      setError("");
+      setCancelledOrdersLoading(true);
+      setCancelledOrdersError("");
+      return fetch(`/api/audit-logs?${query}`)
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Unable to load audit log");
+          return response.json();
+        })
+        .then((data) => {
+          if (!cancelled) {
+            setEvents(data.events);
+            setCancelledOrders(data.cancelledOrders);
+          }
+        })
+        .catch((loadError) => {
+          if (!cancelled) {
+            setError(loadError.message);
+            setCancelledOrdersError(loadError.message);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setCancelledOrdersLoading(false);
+        });
+    });
 
     return () => {
       cancelled = true;
@@ -163,6 +226,71 @@ export default function AuditLogPanel({ memberships }: { memberships: Membership
           </table>
         </div>
       ) : null}
+
+      <div className="mt-8">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Cancelled Orders</h3>
+            <p className="mt-1 text-sm text-gray-500">Detailed records of orders cancelled in this branch.</p>
+          </div>
+          {!cancelledOrdersLoading && !cancelledOrdersError ? (
+            <span className="text-sm font-semibold text-gray-600">{cancelledOrders.length} orders</span>
+          ) : null}
+        </div>
+        {cancelledOrdersLoading ? <p className="py-4 text-sm text-gray-500">Loading cancelled orders...</p> : null}
+        {cancelledOrdersError ? <p className="py-4 text-sm text-red-700">{cancelledOrdersError}</p> : null}
+        {!cancelledOrdersLoading && !cancelledOrdersError && cancelledOrders.length === 0 ? (
+          <p className="py-4 text-sm text-gray-500">No cancelled orders found for this branch.</p>
+        ) : null}
+        {!cancelledOrdersLoading && !cancelledOrdersError && cancelledOrders.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1250px] text-left text-sm">
+              <thead className="border-y border-gray-200 text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Cancelled</th>
+                  <th className="px-3 py-2 font-semibold">Transaction</th>
+                  <th className="px-3 py-2 font-semibold">Patient</th>
+                  <th className="px-3 py-2 font-semibold">Patient ID</th>
+                  <th className="px-3 py-2 font-semibold">Gender</th>
+                  <th className="px-3 py-2 font-semibold">Tests</th>
+                  <th className="px-3 py-2 font-semibold">Total</th>
+                  <th className="px-3 py-2 font-semibold">Paid</th>
+                  <th className="px-3 py-2 font-semibold">Balance</th>
+                  <th className="px-3 py-2 font-semibold">Referral</th>
+                  <th className="px-3 py-2 font-semibold">Ordered By</th>
+                  <th className="px-3 py-2 font-semibold">Cancelled By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cancelledOrders.map((order) => (
+                  <tr key={order._id} className="border-b border-gray-100 align-top text-gray-700">
+                    <td className="whitespace-nowrap px-3 py-3">
+                      {order.cancelledAt ? new Date(order.cancelledAt).toLocaleString() : "Not recorded"}
+                    </td>
+                    <td className="px-3 py-3">{order.transId || order._id}</td>
+                    <td className="px-3 py-3">{order.name || "—"}</td>
+                    <td className="px-3 py-3">{order.patientId || "—"}</td>
+                    <td className="px-3 py-3">{order.gender || "—"}</td>
+                    <td className="max-w-sm px-3 py-3">
+                      {formatOrderTests(order.tests).length ? (
+                        <ul className="list-inside list-disc space-y-1">
+                          {formatOrderTests(order.tests).map((test, index) => <li key={`${order._id}-${index}`}>{test}</li>)}
+                        </ul>
+                      ) : "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3">{formatCurrency(order.amount)}</td>
+                    <td className="whitespace-nowrap px-3 py-3">{formatCurrency(order.amountPaid)}</td>
+                    <td className="whitespace-nowrap px-3 py-3">{formatCurrency(order.bal)}</td>
+                    <td className="px-3 py-3">{order.referral || "—"}</td>
+                    <td className="px-3 py-3">{order.user || "—"}</td>
+                    <td className="px-3 py-3">{order.cancelledBy || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </div>
 
       {selectedEvent ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onClick={() => setSelectedEvent(null)}>
