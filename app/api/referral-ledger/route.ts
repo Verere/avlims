@@ -125,6 +125,11 @@ export async function PATCH(req: NextRequest) {
     if (body?.action === 'markReferrerPendingPaid') {
       const branchId = String(body.branchId || '').trim();
       const referrerId = String(body.referrerId || '').trim();
+      const targetStatus = body.targetStatus || 'paid';
+      if (targetStatus !== 'pending' && targetStatus !== 'paid') {
+        return NextResponse.json({ error: 'targetStatus must be pending or paid' }, { status: 400 });
+      }
+      const sourceStatus = targetStatus === 'paid' ? 'pending' : 'paid';
       const ledgerIds: string[] = Array.isArray(body.ledgerIds)
         ? Array.from(new Set<string>(body.ledgerIds.map((id: unknown) => String(id || '').trim())))
         : [];
@@ -150,12 +155,12 @@ export async function PATCH(req: NextRequest) {
             _id: { $in: ledgerIds },
             branchId,
             referrer: referrerId,
-            status: 'pending',
+            status: sourceStatus,
             isCancelled: { $ne: true },
           }).session(session);
 
           for (const ledger of pendingLedgers) {
-            ledger.status = 'paid';
+            ledger.status = targetStatus;
             await ledger.save({ session });
           }
 
@@ -170,7 +175,7 @@ export async function PATCH(req: NextRequest) {
                 actorEmail: typeof token?.email === 'string' ? token.email : undefined,
                 labId: ledger.lab,
                 branchId: ledger.branchId,
-                changes: { status: { from: 'pending', to: 'paid' } },
+                changes: { status: { from: sourceStatus, to: targetStatus } },
                 metadata: {
                   referrerId: String(ledger.referrer),
                   amount: ledger.amount,
@@ -224,111 +229,124 @@ export async function PATCH(req: NextRequest) {
       }
 
       let createdCount = 0;
-      if (referrerId) {
-        const orders = await Order.find({
+      const [orders, referrers] = await Promise.all([
+        Order.find({
           branchId,
-          referralId: referrerId,
           isCancelled: { $ne: true },
           bDate: { $gte: fromDate, $lt: dayAfterToDate },
-        }).lean();
+        }).lean(),
+        Referrer.find({
+          branchId,
+          isCancelled: { $ne: true },
+          ...(referrerId ? { _id: referrerId } : {}),
+        }).select('_id name').lean(),
+      ]);
+      if (referrerId && referrers.length === 0) {
+        return NextResponse.json({ error: 'Referrer not found for this branch' }, { status: 404 });
+      }
 
-        if (orders.length > 0) {
-          const existingOrderIds = await ReferralLedger.distinct('testOrder', {
-            testOrder: { $in: orders.map((order) => order._id) },
-          });
-          const existingIds = new Set(existingOrderIds.map((id) => String(id)));
-          const missingOrders = orders.filter((order) => !existingIds.has(String(order._id)));
+      const referrersById = new Map(referrers.map((referrer) => [String(referrer._id), referrer]));
+      const referrersByName = new Map(
+        referrers.map((referrer) => [String(referrer.name || '').trim().toLocaleLowerCase(), referrer])
+      );
+      const referredOrders = orders.flatMap((order) => {
+        const referralName = String(order.referral || '').trim();
+        const matchedReferrer = referrersById.get(String(order.referralId || ''))
+          || (['', 'walk-in', 'walkin', 'walk in'].includes(referralName.toLocaleLowerCase())
+            ? undefined
+            : referrersByName.get(referralName.toLocaleLowerCase()));
+        return matchedReferrer ? [{ order, referrer: matchedReferrer }] : [];
+      });
 
-          if (missingOrders.length > 0) {
-            const labSlugs = Array.from(new Set(missingOrders.map((order) => String(order.slug || '')).filter(Boolean)));
-            const labs = await Lab.find({ slug: { $in: labSlugs } }).select('_id slug').lean();
-            const labIdsBySlug = new Map(labs.map((lab) => [lab.slug, lab._id]));
-            if (missingOrders.some((order) => !labIdsBySlug.has(String(order.slug || '')))) {
-              return NextResponse.json({ error: 'One or more matching orders have no valid lab record' }, { status: 400 });
-            }
-            const referrer = await Referrer.findOne({
-              _id: referrerId,
-              branchId,
-              isCancelled: { $ne: true },
-            }).select('_id').lean();
-            if (!referrer) {
-              return NextResponse.json({ error: 'Referrer not found for this branch' }, { status: 404 });
-            }
+      if (referredOrders.length > 0) {
+        const existingOrderIds = await ReferralLedger.distinct('testOrder', {
+          branchId,
+          testOrder: { $in: referredOrders.map(({ order }) => order._id) },
+        });
+        const existingIds = new Set(existingOrderIds.map((id) => String(id)));
+        const missingOrders = referredOrders.filter(({ order }) => !existingIds.has(String(order._id)));
 
-            const newLedgers = missingOrders.flatMap((order) => {
-              const labId = labIdsBySlug.get(String(order.slug || ''));
-              if (!labId) throw new Error('A matching order is missing its lab record');
+        if (missingOrders.length > 0) {
+          const labSlugs = Array.from(new Set(missingOrders.map(({ order }) => String(order.slug || '')).filter(Boolean)));
+          const labs = await Lab.find({ slug: { $in: labSlugs } }).select('_id slug').lean();
+          const labIdsBySlug = new Map(labs.map((lab) => [lab.slug, lab._id]));
+          if (missingOrders.some(({ order }) => !labIdsBySlug.has(String(order.slug || '')))) {
+            return NextResponse.json({ error: 'One or more matching orders have no valid lab record' }, { status: 400 });
+          }
 
-              const tests: Array<{
-                testId: string;
-                testName: string;
-                panelId?: string;
-                panelName?: string;
-                quantity: number;
-                amount: number;
-                bonus: number;
-              }> = [];
-              const seenPanels = new Set<string>();
-              for (const item of Array.isArray(order.tests) ? order.tests : []) {
-                const panelId = String(item?.panel?.id || '');
-                if (panelId) {
-                  if (seenPanels.has(panelId)) continue;
-                  seenPanels.add(panelId);
-                  const amount = Number(item.panel.price || 0);
-                  tests.push({
-                    testId: panelId,
-                    testName: String(item.panel.name || item.name || 'Panel'),
-                    panelId,
-                    panelName: String(item.panel.name || item.name || 'Panel'),
-                    quantity: 1,
-                    amount,
-                    bonus: !testId || testId === panelId
-                      ? Math.round((amount * percentage / 100 + Number.EPSILON) * 100) / 100
-                      : 0,
-                  });
-                  continue;
-                }
+          const newLedgers = missingOrders.flatMap(({ order, referrer }) => {
+            const labId = labIdsBySlug.get(String(order.slug || ''));
+            if (!labId) throw new Error('A matching order is missing its lab record');
 
-                const name = String(item?.name || 'Test');
-                const itemId = String(item?.id || name);
-                const quantity = Math.max(1, Number(item?.quantity || 1));
-                const amount = Number(item?.price || 0) * quantity;
+            const tests: Array<{
+              testId: string;
+              testName: string;
+              panelId?: string;
+              panelName?: string;
+              quantity: number;
+              amount: number;
+              bonus: number;
+            }> = [];
+            const seenPanels = new Set<string>();
+            for (const item of Array.isArray(order.tests) ? order.tests : []) {
+              const panelId = String(item?.panel?.id || '');
+              if (panelId) {
+                if (seenPanels.has(panelId)) continue;
+                seenPanels.add(panelId);
+                const amount = Number(item.panel.price || 0);
                 tests.push({
-                  testId: itemId,
-                  testName: name,
-                  quantity,
+                  testId: panelId,
+                  testName: String(item.panel.name || item.name || 'Panel'),
+                  panelId,
+                  panelName: String(item.panel.name || item.name || 'Panel'),
+                  quantity: 1,
                   amount,
-                  bonus: !testId || testId === itemId
+                  bonus: !testId || testId === panelId
                     ? Math.round((amount * percentage / 100 + Number.EPSILON) * 100) / 100
                     : 0,
                 });
+                continue;
               }
 
-              if (testId && !tests.some((test) => test.testId === testId)) return [];
-              const bonus = tests.reduce((sum, test) => sum + test.bonus, 0);
-              return [{
-                lab: labId,
-                referrer: referrer._id,
-                testOrder: order._id,
-                tests,
-                amount: Number(order.amount ?? tests.reduce((sum, test) => sum + test.amount, 0)),
-                bonus: tests.length > 0
-                  ? bonus
-                  : !testId
-                    ? Math.round((Number(order.amount || 0) * percentage / 100 + Number.EPSILON) * 100) / 100
-                    : 0,
-                status: 'pending' as const,
-                isCancelled: false,
-                user: String(order.user || 'system'),
-                branchId: order.branchId,
-                businessDate: order.bDate,
-              }];
-            });
-
-            if (newLedgers.length > 0) {
-              await ReferralLedger.insertMany(newLedgers, { ordered: true });
-              createdCount = newLedgers.length;
+              const name = String(item?.name || 'Test');
+              const itemId = String(item?.id || name);
+              const quantity = Math.max(1, Number(item?.quantity || 1));
+              const amount = Number(item?.price || 0) * quantity;
+              tests.push({
+                testId: itemId,
+                testName: name,
+                quantity,
+                amount,
+                bonus: !testId || testId === itemId
+                  ? Math.round((amount * percentage / 100 + Number.EPSILON) * 100) / 100
+                  : 0,
+              });
             }
+
+            if (testId && !tests.some((test) => test.testId === testId)) return [];
+            const bonus = tests.reduce((sum, test) => sum + test.bonus, 0);
+            return [{
+              lab: labId,
+              referrer: referrer._id,
+              testOrder: order._id,
+              tests,
+              amount: Number(order.amount ?? tests.reduce((sum, test) => sum + test.amount, 0)),
+              bonus: tests.length > 0
+                ? bonus
+                : !testId
+                  ? Math.round((Number(order.amount || 0) * percentage / 100 + Number.EPSILON) * 100) / 100
+                  : 0,
+              status: 'pending' as const,
+              isCancelled: false,
+              user: String(order.user || 'system'),
+              branchId: order.branchId,
+              businessDate: order.bDate,
+            }];
+          });
+
+          if (newLedgers.length > 0) {
+            await ReferralLedger.insertMany(newLedgers, { ordered: true });
+            createdCount = newLedgers.length;
           }
         }
       }

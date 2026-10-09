@@ -74,6 +74,14 @@ function getEventSummary(event: AuditEvent) {
   const patientName = event.changes?.patientName as { before?: unknown; after?: unknown } | undefined;
   if (patientName?.after) return `Patient: ${String(patientName.after)}`;
 
+  const statusChange = event.changes?.status as { from?: unknown; to?: unknown } | undefined;
+  if (event.entityType === "ReferralLedger" && statusChange && typeof statusChange === "object") {
+    const from = String(statusChange.from || "unknown");
+    const to = String(statusChange.to || "unknown");
+    const testOrderId = event.metadata?.testOrderId;
+    return `Ledger status: ${from} → ${to}${testOrderId ? ` · Order ${String(testOrderId)}` : ""}`;
+  }
+
   const fields = event.changes?.fields as Record<string, unknown> | undefined;
   if (fields && Object.keys(fields).length > 0) {
     return `${Object.keys(fields).map(formatLabel).join(", ")} updated`;
@@ -305,7 +313,16 @@ export default function AuditLogPanel({ memberships }: { memberships: Membership
               <div><dt className="text-slate-500">Action</dt><dd className="font-medium capitalize text-slate-900">{selectedEvent.action.replace("_", " ")}</dd></div>
               <div><dt className="text-slate-500">Record</dt><dd className="font-medium text-slate-900">{selectedEvent.entityType}{selectedEvent.entityId ? ` #${selectedEvent.entityId}` : ""}</dd></div>
             </dl>
-            <div className="mt-5"><p className="mb-2 text-sm font-semibold text-slate-700">Recorded changes</p><pre className="max-h-72 overflow-auto bg-slate-50 p-3 text-xs text-slate-700">{JSON.stringify(selectedEvent.changes || selectedEvent.metadata || {}, null, 2)}</pre></div>
+            <div className="mt-5">
+              <p className="mb-2 text-sm font-semibold text-slate-700">Recorded changes</p>
+              <pre className="max-h-72 overflow-auto bg-slate-50 p-3 text-xs text-slate-700">{JSON.stringify(selectedEvent.changes || {}, null, 2)}</pre>
+            </div>
+            {selectedEvent.metadata && Object.keys(selectedEvent.metadata).length > 0 ? (
+              <div className="mt-4">
+                <p className="mb-2 text-sm font-semibold text-slate-700">Related record details</p>
+                <pre className="max-h-72 overflow-auto bg-slate-50 p-3 text-xs text-slate-700">{JSON.stringify(selectedEvent.metadata, null, 2)}</pre>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

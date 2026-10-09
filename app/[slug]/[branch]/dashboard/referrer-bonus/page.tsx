@@ -762,18 +762,20 @@ export default function ReferrerBonusPage() {
     }
   };
 
-  const updateReferrerPendingStatus = async (group: { referrerId: string; referrer: string }) => {
+  const updateReferrerStatus = async (group: { referrerId: string; referrer: string }) => {
     if (!branchId || !group.referrerId || updatingReferrerId) return;
 
-    const ledgerIds = rows
+    const sourceStatus = statusFilter === "paid" ? "paid" : "pending";
+    const targetStatus = sourceStatus === "paid" ? "pending" : "paid";
+    const ledgerIds = filteredRows
       .filter((row) => {
         const rowReferrerId = typeof row.referrer === "string" ? row.referrer : String(row.referrer?._id || "");
-        return rowReferrerId === group.referrerId && row.status === "pending";
+        return rowReferrerId === group.referrerId && row.status === sourceStatus;
       })
       .map((row) => row._id);
 
     if (ledgerIds.length === 0) {
-      toast.info(`No fetched pending entries for ${group.referrer}.`);
+      toast.info(`No fetched ${sourceStatus} entries for ${group.referrer}.`);
       return;
     }
 
@@ -786,6 +788,7 @@ export default function ReferrerBonusPage() {
           action: "markReferrerPendingPaid",
           branchId,
           referrerId: group.referrerId,
+          targetStatus,
           ledgerIds,
         }),
       });
@@ -794,9 +797,9 @@ export default function ReferrerBonusPage() {
 
       const updatedIds = new Set<string>(data.updatedLedgerIds || []);
       setRows((currentRows) => currentRows.map((row) =>
-        updatedIds.has(row._id) ? { ...row, status: "paid" } : row
+        updatedIds.has(row._id) ? { ...row, status: targetStatus } : row
       ));
-      toast.success(`${data.updatedCount} pending entr${data.updatedCount === 1 ? "y" : "ies"} for ${group.referrer} marked paid.`);
+      toast.success(`${data.updatedCount} ${sourceStatus} entr${data.updatedCount === 1 ? "y" : "ies"} for ${group.referrer} updated to ${targetStatus}.`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to update referral status.");
     } finally {
@@ -842,7 +845,7 @@ export default function ReferrerBonusPage() {
                 {recalculateReferrer ? `Recalculate pending bonuses for ${recalculateReferrer.name}` : "Recalculate pending bonuses"}
               </h2>
               <p className={`mt-2 text-sm ${pageTheme.mutedText}`}>
-                This percentage applies to pending, non-cancelled entries in the selected date range {recalculateReferrer ? `for ${recalculateReferrer.name}` : "in this branch"}. Missing ledgers are added for matching orders when recalculating a specific referrer. Paid and cancelled entries will not change.
+                This percentage applies to pending, non-cancelled entries in the selected date range {recalculateReferrer ? `for ${recalculateReferrer.name}` : "in this branch"}. Missing ledgers are added for matching orders and referrers in that range. Paid and cancelled entries will not change.
               </p>
               <label className={`mt-4 flex flex-col text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
                 Recalculate
@@ -1207,11 +1210,15 @@ export default function ReferrerBonusPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => updateReferrerPendingStatus(group)}
-                          disabled={!group.referrerId || group.pendingCount === 0 || updatingReferrerId === group.referrerId}
-                          className={`${pageTheme.button} ${!group.referrerId || group.pendingCount === 0 || updatingReferrerId === group.referrerId ? "cursor-not-allowed opacity-60" : ""}`}
+                          onClick={() => updateReferrerStatus(group)}
+                          disabled={!group.referrerId || (statusFilter === "paid" ? group.paidCount === 0 : group.pendingCount === 0) || updatingReferrerId === group.referrerId}
+                          className={`${pageTheme.button} ${!group.referrerId || (statusFilter === "paid" ? group.paidCount === 0 : group.pendingCount === 0) || updatingReferrerId === group.referrerId ? "cursor-not-allowed opacity-60" : ""}`}
                         >
-                          {updatingReferrerId === group.referrerId ? "Updating status..." : "Mark pending as paid"}
+                          {updatingReferrerId === group.referrerId
+                            ? "Updating status..."
+                            : statusFilter === "paid"
+                              ? "Revert paid to pending"
+                              : "Mark pending as paid"}
                         </button>
                         <button
                           type="button"
