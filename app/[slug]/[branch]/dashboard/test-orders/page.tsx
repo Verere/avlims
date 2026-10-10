@@ -47,6 +47,9 @@ export default function DashboardTestOrdersPage() {
   const [fromDate, setFromDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [toDate, setToDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [selectedReferrerId, setSelectedReferrerId] = useState("");
+  const [referrerSearch, setReferrerSearch] = useState("");
+  const [referrerDropdownOpen, setReferrerDropdownOpen] = useState(false);
+  const [activeReferrerIndex, setActiveReferrerIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
 
   const pathname = usePathname();
@@ -166,6 +169,21 @@ export default function DashboardTestOrdersPage() {
     });
   }, [orders, searchQuery, fromDate, toDate, selectedReferrerId, referrers]);
 
+  const matchingReferrers = useMemo(() => {
+    const query = referrerSearch.trim().toLocaleLowerCase();
+    return query
+      ? referrers.filter((referrer) => referrer.name.toLocaleLowerCase().includes(query))
+      : referrers;
+  }, [referrers, referrerSearch]);
+  const selectedReferrer = referrers.find((referrer) => referrer.id === selectedReferrerId);
+
+  const selectReferrer = (referrer: ReferrerOption | null) => {
+    setSelectedReferrerId(referrer?.id || "");
+    setReferrerSearch("");
+    setReferrerDropdownOpen(false);
+    setActiveReferrerIndex(0);
+  };
+
   const totals = useMemo(() => {
     const patients = new Set<string>();
     return filteredOrders.reduce(
@@ -267,19 +285,101 @@ export default function DashboardTestOrdersPage() {
                   className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
                 />
               </label>
-              <label className="flex min-w-0 flex-col text-sm font-medium text-slate-700">
+              <div
+                className="relative flex min-w-0 flex-col text-sm font-medium text-slate-700"
+                onBlur={(event) => {
+                  if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+                    setReferrerDropdownOpen(false);
+                    setReferrerSearch("");
+                  }
+                }}
+              >
                 Referrer
-                <select
-                  value={selectedReferrerId}
-                  onChange={(event) => setSelectedReferrerId(event.target.value)}
-                  className="mt-1 h-10 w-full min-w-0 truncate rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
-                >
-                  <option value="">All referrers</option>
-                  {referrers.map((referrer) => (
-                    <option key={referrer.id} value={referrer.id}>{referrer.name}</option>
-                  ))}
-                </select>
-              </label>
+                <input
+                  type="text"
+                  role="combobox"
+                  aria-label="Search and select referrer"
+                  aria-autocomplete="list"
+                  aria-expanded={referrerDropdownOpen}
+                  aria-controls="referrer-options"
+                  aria-activedescendant={referrerDropdownOpen
+                    ? activeReferrerIndex === 0
+                      ? "referrer-option-all"
+                      : matchingReferrers[activeReferrerIndex - 1]
+                        ? `referrer-option-${matchingReferrers[activeReferrerIndex - 1].id}`
+                        : undefined
+                    : undefined}
+                  value={referrerDropdownOpen ? referrerSearch : selectedReferrer?.name || ""}
+                  placeholder="All referrers"
+                  onFocus={() => {
+                    setReferrerSearch("");
+                    setReferrerDropdownOpen(true);
+                    setActiveReferrerIndex(0);
+                  }}
+                  onChange={(event) => {
+                    setReferrerSearch(event.target.value);
+                    setReferrerDropdownOpen(true);
+                    setActiveReferrerIndex(0);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setReferrerDropdownOpen(true);
+                      setActiveReferrerIndex((index) => Math.min(index + 1, matchingReferrers.length));
+                    } else if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setActiveReferrerIndex((index) => Math.max(index - 1, 0));
+                    } else if (event.key === "Enter" && referrerDropdownOpen) {
+                      event.preventDefault();
+                      if (activeReferrerIndex === 0) selectReferrer(null);
+                      else if (matchingReferrers[activeReferrerIndex - 1]) {
+                        selectReferrer(matchingReferrers[activeReferrerIndex - 1]);
+                      }
+                    } else if (event.key === "Escape") {
+                      setReferrerDropdownOpen(false);
+                      setReferrerSearch("");
+                    }
+                  }}
+                  className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
+                />
+                {referrerDropdownOpen ? (
+                  <div
+                    id="referrer-options"
+                    role="listbox"
+                    className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                  >
+                    <button
+                      id="referrer-option-all"
+                      type="button"
+                      role="option"
+                      aria-selected={!selectedReferrerId}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => selectReferrer(null)}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 ${activeReferrerIndex === 0 ? "bg-blue-50 text-blue-800" : "text-slate-700"}`}
+                    >
+                      All referrers
+                    </button>
+                    {matchingReferrers.map((referrer, index) => (
+                      <button
+                        id={`referrer-option-${referrer.id}`}
+                        key={referrer.id}
+                        type="button"
+                        role="option"
+                        aria-selected={referrer.id === selectedReferrerId}
+                        onMouseEnter={() => setActiveReferrerIndex(index + 1)}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectReferrer(referrer)}
+                        className={`w-full truncate px-3 py-2 text-left text-sm hover:bg-blue-50 ${activeReferrerIndex === index + 1 ? "bg-blue-50 text-blue-800" : "text-slate-700"}`}
+                      >
+                        {referrer.name}
+                      </button>
+                    ))}
+                    {matchingReferrers.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-slate-500">No referrers match your search.</p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={() => {
