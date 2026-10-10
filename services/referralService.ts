@@ -4,6 +4,7 @@ import TestOrderItem from '../models/TestOrderItem';
 import ReferralLedger from '../models/ReferralLedger';
 import TestReferralProfile from '../models/TestReferralProfile';
 import Referrer from '@/models/Referrer';
+import RefClinic from '@/models/RefClinic';
 import { dbConnect } from '../lib/mongodb';
 
 function escapeRegex(value: string) {

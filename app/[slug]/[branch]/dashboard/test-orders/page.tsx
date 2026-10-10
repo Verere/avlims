@@ -14,6 +14,7 @@ interface TestOrder {
   status: string;
   isCancelled?: boolean;
   createdAt: string;
+  referralId?: string;
   tests?: {
     id?: string;
     name: string;
@@ -32,11 +33,20 @@ interface TestOrder {
   user?: string;
 }
 
+interface ReferrerOption {
+  id: string;
+  name: string;
+}
+
 export default function DashboardTestOrdersPage() {
   const [orders, setOrders] = useState<TestOrder[]>([]);
+  const [referrers, setReferrers] = useState<ReferrerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [referrersError, setReferrersError] = useState<string | null>(null);
+  const [fromDate, setFromDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [selectedReferrerId, setSelectedReferrerId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
   const pathname = usePathname();
@@ -70,23 +80,17 @@ export default function DashboardTestOrdersPage() {
     });
   };
 
-  const isSameDay = (value: string | undefined, ymd: string) => {
-    if (!value) return false;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return false;
-    const [year, month, day] = ymd.split("-").map(Number);
-    if (!year || !month || !day) return false;
-    return (
-      date.getFullYear() === year &&
-      date.getMonth() + 1 === month &&
-      date.getDate() === day
-    );
+  const getBusinessDate = (value?: string) => {
+    if (!value) return "";
+    const datePrefix = value.slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(datePrefix) ? datePrefix : "";
   };
 
   useEffect(() => {
     async function fetchOrders() {
       setLoading(true);
       setError(null);
+      setReferrersError(null);
       try {
         const pathParts = (pathname || "").split("/").filter(Boolean);
         const branch = pathParts[1];
@@ -96,13 +100,36 @@ export default function DashboardTestOrdersPage() {
         const branchDoc = await branchRes.json();
         const branchId = branchDoc._id;
 
-        const res = await fetch(`/api/test-orders?branchId=${encodeURIComponent(branchId)}`);
-        if (!res.ok) throw new Error("Failed to fetch test orders");
-        const data = await res.json();
+        const [ordersRes, referrersResult] = await Promise.all([
+          fetch(`/api/test-orders?branchId=${encodeURIComponent(branchId)}`),
+          fetch(`/api/referrers?branchId=${encodeURIComponent(branchId)}`)
+            .then(async (response) => {
+              if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data?.error || "Failed to fetch referrers");
+              }
+              return { data: await response.json(), error: null };
+            })
+            .catch((fetchError: unknown) => ({
+              data: [],
+              error: fetchError instanceof Error ? fetchError.message : "Failed to fetch referrers",
+            })),
+        ]);
+        if (!ordersRes.ok) throw new Error("Failed to fetch test orders");
+        const data = await ordersRes.json();
         const normalized = Array.isArray(data) ? data : [data];
         setOrders(normalized.filter((order: TestOrder) => order?.isCancelled !== true));
-      } catch (err: any) {
-        setError(err.message || "Unknown error");
+        setReferrersError(referrersResult.error);
+        setReferrers(Array.isArray(referrersResult.data)
+          ? referrersResult.data
+              .map((referrer: { _id?: string; id?: string; name?: string }) => ({
+                id: String(referrer._id || referrer.id || ""),
+                name: String(referrer.name || ""),
+              }))
+              .filter((referrer: ReferrerOption) => referrer.id && referrer.name)
+          : []);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
         setLoading(false);
       }
@@ -113,7 +140,15 @@ export default function DashboardTestOrdersPage() {
   const filteredOrders = useMemo(() => {
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
     return orders.filter((order) => {
-      if (!isSameDay(order.bDate || order.createdAt, selectedDate)) return false;
+      const orderDate = getBusinessDate(order.bDate || order.createdAt);
+      if (!fromDate || !toDate || fromDate > toDate || orderDate < fromDate || orderDate > toDate) return false;
+      if (selectedReferrerId) {
+        const selectedReferrer = referrers.find((referrer) => referrer.id === selectedReferrerId);
+        const matchesReferrer = order.referralId
+          ? order.referralId === selectedReferrerId
+          : Boolean(selectedReferrer && order.referral?.trim().toLocaleLowerCase() === selectedReferrer.name.toLocaleLowerCase());
+        if (!matchesReferrer) return false;
+      }
       if (!normalizedSearchQuery) return true;
 
       const testNames = order.tests?.flatMap((test) => [test.name, test.panel?.name]) || [];
@@ -129,20 +164,26 @@ export default function DashboardTestOrdersPage() {
         ...testNames,
       ].some((value) => String(value ?? "").toLowerCase().includes(normalizedSearchQuery));
     });
-  }, [orders, searchQuery, selectedDate]);
+  }, [orders, searchQuery, fromDate, toDate, selectedReferrerId, referrers]);
 
-  const totals = useMemo(
-    () =>
-      filteredOrders.reduce(
-        (acc, order) => {
-          acc.amount += Number(order.amount || 0);
-          acc.discount += Number(order.discount || 0);
-          return acc;
-        },
-        { amount: 0, discount: 0 }
-      ),
-    [filteredOrders]
-  );
+  const totals = useMemo(() => {
+    const patients = new Set<string>();
+    return filteredOrders.reduce(
+      (acc, order) => {
+        acc.amount += Number(order.amount || 0);
+        acc.discount += Number(order.discount || 0);
+        acc.testEntries += (order.tests || []).reduce((testCount, test) => {
+          const quantity = Number(test.quantity);
+          return testCount + (Number.isFinite(quantity) && quantity > 0 ? quantity : 1);
+        }, 0);
+        const patientKey = String(order.patientId || order.name || "").trim().toLocaleLowerCase();
+        if (patientKey) patients.add(patientKey);
+        acc.patientCount = patients.size;
+        return acc;
+      },
+      { amount: 0, discount: 0, testEntries: 0, patientCount: 0 }
+    );
+  }, [filteredOrders]);
 
   const renderTestsCell = (tests?: TestOrder["tests"]) => {
     if (!tests || tests.length === 0) return <span>-</span>;
@@ -190,14 +231,14 @@ export default function DashboardTestOrdersPage() {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100">
       <section className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="flex flex-col gap-5">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Orders</p>
               <h1 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">Test Orders</h1>
-              <p className="mt-1 text-sm text-slate-600">View branch test orders by date.</p>
+              <p className="mt-1 text-sm text-slate-600">View branch test orders by business date and referrer.</p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <label className="flex flex-col text-sm font-medium text-slate-700">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <label className="flex min-w-0 flex-col text-sm font-medium text-slate-700 xl:col-span-2">
                 Search
                 <input
                   type="search"
@@ -205,29 +246,60 @@ export default function DashboardTestOrdersPage() {
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Patient, test, or ID"
                   aria-label="Search test orders"
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2 sm:w-56"
+                  className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
                 />
               </label>
-              <label className="flex flex-col text-sm font-medium text-slate-700">
-                Date
+              <label className="flex min-w-0 flex-col text-sm font-medium text-slate-700">
+                From
                 <input
                   type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
                 />
+              </label>
+              <label className="flex min-w-0 flex-col text-sm font-medium text-slate-700">
+                To
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
+                />
+              </label>
+              <label className="flex min-w-0 flex-col text-sm font-medium text-slate-700">
+                Referrer
+                <select
+                  value={selectedReferrerId}
+                  onChange={(event) => setSelectedReferrerId(event.target.value)}
+                  className="mt-1 h-10 w-full min-w-0 truncate rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
+                >
+                  <option value="">All referrers</option>
+                  {referrers.map((referrer) => (
+                    <option key={referrer.id} value={referrer.id}>{referrer.name}</option>
+                  ))}
+                </select>
               </label>
               <button
                 type="button"
-                onClick={() => setSelectedDate(new Date().toISOString().slice(0, 10))}
-                className="h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                onClick={() => {
+                  const today = new Date().toISOString().slice(0, 10);
+                  setFromDate(today);
+                  setToDate(today);
+                }}
+                className="h-10 w-full self-end rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:col-span-2 lg:col-span-1"
               >
                 Today
               </button>
             </div>
           </div>
+          {referrersError ? (
+            <p className="mt-3 text-sm text-amber-700" role="status">
+              Referrer filter unavailable: {referrersError}. Orders are still shown without that filter.
+            </p>
+          ) : null}
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Total Amount</p>
               <p className="mt-1 text-lg font-bold text-blue-900">{formatCurrency(totals.amount)}</p>
@@ -235,6 +307,14 @@ export default function DashboardTestOrdersPage() {
             <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Total Discount</p>
               <p className="mt-1 text-lg font-bold text-amber-900">{formatCurrency(totals.discount)}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Test Entries</p>
+              <p className="mt-1 text-lg font-bold text-emerald-900">{totals.testEntries}</p>
+            </div>
+            <div className="rounded-xl border border-violet-100 bg-violet-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Number of Patients</p>
+              <p className="mt-1 text-lg font-bold text-violet-900">{totals.patientCount}</p>
             </div>
           </div>
         </div>
@@ -260,20 +340,20 @@ export default function DashboardTestOrdersPage() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
                       Loading test orders...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-red-600">
+                    <td colSpan={11} className="px-4 py-10 text-center text-red-600">
                       {error}
                     </td>
                   </tr>
                 ) : filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
-                      No matching test orders found for the selected date.
+                    <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
+                      No matching test orders found for the selected filters.
                     </td>
                   </tr>
                 ) : (
