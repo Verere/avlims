@@ -64,16 +64,48 @@ export async function GET(req: NextRequest) {
     const labId = req.nextUrl.searchParams.get('labId');
     const branchId = req.nextUrl.searchParams.get('branchId');
     const date = req.nextUrl.searchParams.get('date');
+    const from = req.nextUrl.searchParams.get('from');
+    const to = req.nextUrl.searchParams.get('to');
 
     if (!labId && !branchId) {
       return NextResponse.json({ error: 'Either labId or branchId is required' }, { status: 400 });
     }
 
-    const start = date ? new Date(`${date}T00:00:00.000Z`) : new Date();
-    if (!date) start.setHours(0, 0, 0, 0);
-
-    const end = new Date(start);
-    end.setDate(start.getDate() + 1);
+    let start: Date;
+    let end: Date;
+    if (from || to) {
+      const startDate = from ? new Date(`${from}T00:00:00.000Z`) : null;
+      const endDate = to ? new Date(`${to}T00:00:00.000Z`) : null;
+      if (
+        !from ||
+        !to ||
+        Number.isNaN(startDate?.getTime()) ||
+        Number.isNaN(endDate?.getTime()) ||
+        startDate?.toISOString().slice(0, 10) !== from ||
+        endDate?.toISOString().slice(0, 10) !== to
+      ) {
+        return NextResponse.json({ error: 'Valid from and to dates are required. Use YYYY-MM-DD' }, { status: 400 });
+      }
+      if (startDate > endDate) {
+        return NextResponse.json({ error: 'from date must be before or equal to to date' }, { status: 400 });
+      }
+      start = startDate;
+      end = new Date(endDate);
+      end.setUTCDate(end.getUTCDate() + 1);
+    } else {
+      if (date) {
+        start = new Date(`${date}T00:00:00.000Z`);
+        if (Number.isNaN(start.getTime()) || start.toISOString().slice(0, 10) !== date) {
+          return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, { status: 400 });
+        }
+      } else {
+        start = new Date();
+        start.setHours(0, 0, 0, 0);
+      }
+      end = new Date(start);
+      if (date) end.setUTCDate(start.getUTCDate() + 1);
+      else end.setDate(start.getDate() + 1);
+    }
 
     const query: any = {
       isCancelled: false,

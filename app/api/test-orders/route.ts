@@ -2,14 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbConnect } from '../../../lib/mongodb';
 import Order from '../../../models/Order';
 import { writeAuditLog } from '@/lib/audit';
-
-function toAbbreviation(value: unknown) {
-  const words = String(value || "")
-    .trim()
-    .split(/[^a-z0-9]+/i)
-    .filter(Boolean);
-  return words.map((word) => word[0]).join("").toUpperCase() || "NA";
-}
+import { generateTransactionId } from '@/services/transactionIdService';
 
 export async function POST(req: NextRequest) {
   await dbConnect();
@@ -21,11 +14,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "slug and branch are required" }, { status: 400 });
     }
 
-    const orderCount = await Order.countDocuments({ slug: labSlug, branch: branchSlug });
+    const transId = await generateTransactionId({
+      labSlug,
+      branchSlug,
+      branchId: String(body?.branchId || ''),
+      businessDate: typeof body?.bDate === 'string' ? body.bDate : undefined,
+    });
     const payload = {
       ...body,
       bonus: Number(body?.bonus ?? 0),
-      transId: `${toAbbreviation(labSlug)}-${toAbbreviation(branchSlug)}-${String(orderCount + 1).padStart(4, "0")}`,
+      transId,
     };
     const order = await Order.create(payload);
     await writeAuditLog(req, {
@@ -68,4 +66,3 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }
-

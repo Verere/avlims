@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import type { TransactionIdConfig } from '@/lib/transactionId';
 
 export interface IBranch extends Document {
   slug: string;
@@ -8,6 +9,7 @@ export interface IBranch extends Document {
   whatsapp?: string;
   email?: string;
   website?: string;
+  transactionIdConfig?: TransactionIdConfig | null;
   referralBonusPolicy?: {
     defaultPercentage: number;
     exceptions: Array<{
@@ -29,6 +31,14 @@ const BranchSchema = new Schema<IBranch>({
   whatsapp: { type: String },
   email: { type: String },
   website: { type: String },
+  transactionIdConfig: {
+    type: {
+      pattern: { type: String, required: true },
+      reset: { type: String, enum: ['never', 'yearly', 'monthly', 'daily'], required: true },
+      sequenceDigits: { type: Number, min: 1, max: 10, required: true },
+    },
+    default: undefined,
+  },
   referralBonusPolicy: {
     type: {
       defaultPercentage: { type: Number, default: 0 },
@@ -49,5 +59,19 @@ const BranchSchema = new Schema<IBranch>({
     },
   },
 });
+
+const existingBranchModel = mongoose.models.Branch as mongoose.Model<IBranch> | undefined;
+if (existingBranchModel && !existingBranchModel.schema.path('transactionIdConfig')) {
+  existingBranchModel.schema.add({
+    transactionIdConfig: {
+      type: {
+        pattern: { type: String, required: true },
+        reset: { type: String, enum: ['never', 'yearly', 'monthly', 'daily'], required: true },
+        sequenceDigits: { type: Number, min: 1, max: 10, required: true },
+      },
+      default: undefined,
+    },
+  });
+}
 
 export default mongoose.models.Branch || mongoose.model<IBranch>('Branch', BranchSchema);

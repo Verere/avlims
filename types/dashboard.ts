@@ -6,6 +6,13 @@ export type KPI = {
   trendType?: 'up' | 'down';
 };
 
+export type DashboardPeriodFilter = 'today' | 'month';
+
+export type DashboardPeriod = {
+  from: string;
+  to: string;
+};
+
 export type Activity = {
   id: string;
   patient: string;

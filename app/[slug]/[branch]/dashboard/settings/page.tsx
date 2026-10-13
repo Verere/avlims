@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { usePathname } from "next/navigation";
 import type { ReferralBonusPolicy } from "@/lib/referralBonus";
+import {
+  DEFAULT_TRANSACTION_ID_CONFIG,
+  type TransactionIdConfig,
+  type TransactionIdReset,
+} from "@/lib/transactionId";
 
 const emptyPolicy = (): ReferralBonusPolicy => ({
   defaultPercentage: 0,
@@ -12,9 +17,14 @@ const emptyPolicy = (): ReferralBonusPolicy => ({
 export default function SettingsPage() {
   const pathname = usePathname();
   const pathParts = (pathname || "").split("/").filter(Boolean);
+  const labSlug = pathParts[0] || "";
   const branchSlug = pathParts[1] || "";
 
   const [policy, setPolicy] = useState<ReferralBonusPolicy>(emptyPolicy());
+  const [labTransactionConfig, setLabTransactionConfig] = useState<TransactionIdConfig>(DEFAULT_TRANSACTION_ID_CONFIG);
+  const [branchTransactionConfig, setBranchTransactionConfig] = useState<TransactionIdConfig>(DEFAULT_TRANSACTION_ID_CONFIG);
+  const [branchOverrideEnabled, setBranchOverrideEnabled] = useState(false);
+  const [savingTransactionScope, setSavingTransactionScope] = useState<"lab" | "branch" | null>(null);
   const [availableTests, setAvailableTests] = useState<Array<{ id: string; name: string; price: number; category?: string }>>([]);
   const [availablePanels, setAvailablePanels] = useState<Array<{ _id?: string; id?: string; name: string; code?: string; price?: number; category?: string }>>([]);
   const [testsLoading, setTestsLoading] = useState(false);
@@ -37,6 +47,17 @@ export default function SettingsPage() {
         const res = await fetch(`/api/branches/${branchSlug}`);
         if (!res.ok) throw new Error("Failed to load branch settings");
         const branch = await res.json();
+        const transactionSettingsRes = await fetch(
+          `/api/transaction-id-settings?labSlug=${encodeURIComponent(labSlug)}&branchSlug=${encodeURIComponent(branchSlug)}`
+        );
+        if (!transactionSettingsRes.ok) {
+          const data = await transactionSettingsRes.json().catch(() => ({}));
+          throw new Error(data?.error || "Failed to load transaction ID settings");
+        }
+        const transactionSettings = await transactionSettingsRes.json();
+        setLabTransactionConfig(transactionSettings.labConfig || DEFAULT_TRANSACTION_ID_CONFIG);
+        setBranchTransactionConfig(transactionSettings.branchConfig || transactionSettings.labConfig || DEFAULT_TRANSACTION_ID_CONFIG);
+        setBranchOverrideEnabled(transactionSettings.usesBranchOverride === true);
         setPolicy({
           defaultPercentage: Number(branch?.referralBonusPolicy?.defaultPercentage ?? 0),
           exceptions: Array.isArray(branch?.referralBonusPolicy?.exceptions) && branch.referralBonusPolicy.exceptions.length
@@ -95,7 +116,7 @@ export default function SettingsPage() {
     }
 
     load();
-  }, [branchSlug]);
+  }, [labSlug, branchSlug]);
 
   const totalExceptions = useMemo(
     () => policy.exceptions.filter((entry) => entry.testName || entry.testId || entry.panelName || entry.panelId).length,
@@ -239,6 +260,141 @@ export default function SettingsPage() {
     }
   };
 
+  const saveTransactionConfig = async (scope: "lab" | "branch") => {
+    if (!labSlug || !branchSlug) {
+      setMessage("Lab or branch slug is missing.");
+      return;
+    }
+    setSavingTransactionScope(scope);
+    setMessage(null);
+    try {
+      const res = await fetch(
+        `/api/transaction-id-settings?labSlug=${encodeURIComponent(labSlug)}&branchSlug=${encodeURIComponent(branchSlug)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            scope,
+            config: scope === "lab" ? labTransactionConfig : branchTransactionConfig,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to save transaction ID settings");
+      if (scope === "lab" && !branchOverrideEnabled) {
+        setBranchTransactionConfig(labTransactionConfig);
+      }
+      setMessage(`${scope === "lab" ? "Lab-wide" : "Branch override"} transaction ID settings saved.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save transaction ID settings");
+    } finally {
+      setSavingTransactionScope(null);
+    }
+  };
+
+  const clearBranchTransactionOverride = async () => {
+    setSavingTransactionScope("branch");
+    setMessage(null);
+    try {
+      const res = await fetch(
+        `/api/transaction-id-settings?labSlug=${encodeURIComponent(labSlug)}&branchSlug=${encodeURIComponent(branchSlug)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope: "clearBranch" }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to remove branch override");
+      setBranchOverrideEnabled(false);
+      setBranchTransactionConfig(labTransactionConfig);
+      setMessage("Branch override removed; this branch now uses the lab-wide pattern.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to remove branch override");
+    } finally {
+      setSavingTransactionScope(null);
+    }
+  };
+
+  const applyTransactionPreset = (
+    setter: Dispatch<SetStateAction<TransactionIdConfig>>,
+    reset: TransactionIdReset
+  ) => {
+    const datePart = reset === "yearly"
+      ? "-{YYYY}"
+      : reset === "monthly"
+        ? "-{YYYY}{MM}"
+        : reset === "daily"
+          ? "-{YYYY}{MM}{DD}"
+          : "";
+    setter((current) => ({
+      ...current,
+      reset,
+      pattern: `{LAB}-{BRANCH}${datePart}-{SEQ}`,
+    }));
+  };
+
+  const transactionPatternEditor = (
+    label: string,
+    config: TransactionIdConfig,
+    setter: Dispatch<SetStateAction<TransactionIdConfig>>
+  ) => (
+    <div className="grid gap-4 md:grid-cols-2">
+      <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+        Preset
+        <select
+          value={config.reset}
+          onChange={(event) => applyTransactionPreset(setter, event.target.value as TransactionIdReset)}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2"
+        >
+          <option value="never">Continuous sequence</option>
+          <option value="yearly">Reset yearly</option>
+          <option value="monthly">Reset monthly</option>
+          <option value="daily">Reset daily</option>
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+        Sequence digits
+        <input
+          type="number"
+          min={1}
+          max={10}
+          value={config.sequenceDigits}
+          onChange={(event) => setter((current) => ({
+            ...current,
+            sequenceDigits: Number(event.target.value),
+          }))}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 md:col-span-2">
+        ID pattern
+        <input
+          type="text"
+          value={config.pattern}
+          onChange={(event) => setter((current) => ({ ...current, pattern: event.target.value }))}
+          maxLength={100}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono"
+          aria-label={`${label} transaction ID pattern`}
+        />
+        <span className="text-xs font-normal text-slate-500">
+          Tokens: {"{LAB}"} lab initials, {"{BRANCH}"} branch initials, {"{YYYY}"}/{"{MM}"}/{"{DD}"} date parts, {"{SEQ}"} sequence. Reset periods require matching date tokens.
+        </span>
+      </label>
+      <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600 md:col-span-2">
+        Preview: <span className="font-mono font-semibold text-slate-900">
+          {config.pattern
+            .replace("{LAB}", "LAB")
+            .replace("{BRANCH}", "BR")
+            .replace("{YYYY}", "2026")
+            .replace("{MM}", "10")
+            .replace("{DD}", "11")
+            .replace("{SEQ}", "0001")}
+        </span>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
       <section className="mx-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -267,6 +423,71 @@ export default function SettingsPage() {
           <div className="py-8 text-center text-slate-500">Loading settings...</div>
         ) : (
           <div className="space-y-8">
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+              <h2 className="text-lg font-semibold text-slate-900">Test order transaction IDs</h2>
+              <p className="mb-4 mt-1 text-sm text-slate-600">
+                Choose the lab-wide ID pattern. Existing transaction IDs will not change.
+              </p>
+              {transactionPatternEditor("Lab-wide", labTransactionConfig, setLabTransactionConfig)}
+              <button
+                type="button"
+                onClick={() => saveTransactionConfig("lab")}
+                disabled={savingTransactionScope !== null}
+                className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+              >
+                {savingTransactionScope === "lab" ? "Saving..." : "Save lab-wide pattern"}
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Branch override</h2>
+                  <p className="text-sm text-slate-500">Optionally use a different transaction ID format for this branch.</p>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={branchOverrideEnabled}
+                    onChange={(event) => {
+                      const enabled = event.target.checked;
+                      setBranchOverrideEnabled(enabled);
+                      if (!enabled) setBranchTransactionConfig(labTransactionConfig);
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                  />
+                  Enable branch override
+                </label>
+              </div>
+              {branchOverrideEnabled ? (
+                <>
+                  {transactionPatternEditor("Branch", branchTransactionConfig, setBranchTransactionConfig)}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => saveTransactionConfig("branch")}
+                      disabled={savingTransactionScope !== null}
+                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+                    >
+                      {savingTransactionScope === "branch" ? "Saving..." : "Save branch override"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearBranchTransactionOverride}
+                      disabled={savingTransactionScope !== null}
+                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      Remove override
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+                  This branch uses the lab-wide pattern.
+                </p>
+              )}
+            </div>
+
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <label className="flex flex-col text-sm font-medium text-slate-700">
                 Default referral bonus percentage

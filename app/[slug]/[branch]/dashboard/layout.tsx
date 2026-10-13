@@ -69,7 +69,12 @@ export default function Layout({ children, params }: { children: React.ReactNode
             </button>
             {/* User Profile */}
             <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200" aria-label="User profile" aria-haspopup="menu">
-              <img src="/avatar.png" alt="" className="h-8 w-8 rounded-full border" />
+              <span className="grid h-8 w-8 place-items-center rounded-full border border-blue-200 bg-blue-50 text-blue-700" aria-hidden="true">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 12a4 4 0 100-8 4 4 0 000 8zM5 20a7 7 0 0114 0" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 14.5l1 .5 1-.5v2.2c0 1.1-.8 2.1-2 2.8-1.2-.7-2-1.7-2-2.8v-2.2l1 .5 1-.5z" />
+                </svg>
+              </span>
               <span className="hidden text-sm font-medium text-gray-700 lg:inline">Admin</span>
               <svg className="hidden h-4 w-4 text-gray-400 sm:block" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
             </button>

@@ -71,6 +71,10 @@ function formatOrderTests(tests: unknown[] = []) {
 }
 
 function getEventSummary(event: AuditEvent) {
+  if (event.entityType === "Settings" && typeof event.metadata?.summary === "string") {
+    return event.metadata.summary;
+  }
+
   const patientName = event.changes?.patientName as { before?: unknown; after?: unknown } | undefined;
   if (patientName?.after) return `Patient: ${String(patientName.after)}`;
 

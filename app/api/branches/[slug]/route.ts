@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Branch from '@/models/Branch';
+import Lab from '@/models/Lab';
 import { dbConnect } from '@/lib/mongodb';
 import { getBranchBySlug } from '../../../../services/branchService';
+import { writeAuditLog } from '@/lib/audit';
 
 function normalizeBranchSlug(slug: string) {
   return String(slug || '').trim();
@@ -41,6 +43,10 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ slug:
 
     const policy = body?.referralBonusPolicy;
     if (policy && typeof policy === 'object') {
+      const previousPolicy = branch.referralBonusPolicy?.toObject?.() || branch.referralBonusPolicy || {
+        defaultPercentage: 0,
+        exceptions: [],
+      };
       const nextExceptions = Array.isArray(policy.exceptions)
         ? policy.exceptions
             .filter((entry: any) => entry && (entry.testName || entry.testId || entry.panelName || entry.panelId))
@@ -62,6 +68,27 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ slug:
       branch.referralBonusPolicy.defaultPercentage = Number(policy.defaultPercentage ?? 0);
       branch.referralBonusPolicy.exceptions = nextExceptions;
       await branch.save();
+
+      const nextPolicy = {
+        defaultPercentage: branch.referralBonusPolicy.defaultPercentage,
+        exceptions: branch.referralBonusPolicy.exceptions,
+      };
+      if (JSON.stringify(previousPolicy) !== JSON.stringify(nextPolicy)) {
+        const lab = await Lab.findOne({ branches: branch._id }).select('_id').lean();
+        await writeAuditLog(req, {
+          action: 'update',
+          entityType: 'Settings',
+          entityId: branch._id,
+          labId: lab?._id,
+          branchId: branch._id,
+          changes: { fields: { referralBonusPolicy: { from: previousPolicy, to: nextPolicy } } },
+          metadata: {
+            setting: 'Referral bonus policy',
+            scope: 'branch',
+            summary: 'Referral bonus policy updated',
+          },
+        });
+      }
     }
 
     const saved = await Branch.findById(branch._id).lean();
