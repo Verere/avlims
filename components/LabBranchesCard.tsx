@@ -36,7 +36,7 @@ export default function LabBranchesCard({
       {branchesCount > 0 && (
         <>
           <div className="text-green-700 mt-2">Branches: {branchesCount}</div>
-          <RemoveBranchesButton labId={lab._id.toString()} onRemoved={handleRemoved} />
+          {/* <RemoveBranchesButton labId={lab._id.toString()} onRemoved={handleRemoved} /> */}
         </>
       )}
     </div>
