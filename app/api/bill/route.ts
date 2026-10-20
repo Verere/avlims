@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnect } from '../../../lib/mongodb';
 import Bill from '../../../models/Bill';
+import Order from '../../../models/Order';
 import { writeAuditLog } from '@/lib/audit';
 
 export async function GET(req: NextRequest) {
@@ -40,7 +41,15 @@ export async function GET(req: NextRequest) {
     }
 
     const bills = await Bill.find(filter).sort({ businessDate: -1, createdAt: -1 }).lean();
-    return NextResponse.json(bills);
+    const orderIds = [...new Set(bills.map((bill) => String(bill.orderId)).filter(Boolean))];
+    const orders = orderIds.length ? await Order.find({ _id: { $in: orderIds } }).select('tests').lean() : [];
+    const testsByOrder = new Map(orders.map((order) => [String(order._id), (order.tests || []).map((test: unknown) => {
+      if (typeof test === 'string') return test;
+      if (!test || typeof test !== 'object') return '';
+      const value = test as Record<string, unknown>;
+      return String(value.name || value.testName || value.label || '').trim();
+    }).filter(Boolean)]));
+    return NextResponse.json(bills.map((bill) => ({ ...bill, tests: testsByOrder.get(String(bill.orderId)) || [] })));
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }

@@ -11,6 +11,7 @@ type BillRow = {
   orderId?: string;
   patient?: string;
   referrer?: string;
+  tests?: string[];
   billTo?: string;
   amount?: number;
   paid?: number;
@@ -157,11 +158,22 @@ export default function DashboardBillingPage() {
     if (!q) return bills;
     return bills.filter(
       (bill) =>
-        (bill.patient || "").toLowerCase().includes(q) ||
         (bill.billToName || "").toLowerCase().includes(q) ||
         (bill.billTo || "").toLowerCase().includes(q)
     );
   }, [bills, searchQuery]);
+
+  const billsByBillTo = useMemo(() => {
+    const groups = new Map<string, { key: string; label: string; bills: BillRow[] }>();
+    for (const bill of filteredBills) {
+      const label = bill.billToName || bill.billTo || "Unspecified";
+      const key = bill.billTo || bill.billToName || "unspecified";
+      const group = groups.get(key);
+      if (group) group.bills.push(bill);
+      else groups.set(key, { key, label, bills: [bill] });
+    }
+    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [filteredBills]);
 
   const totals = useMemo(() => {
     return filteredBills.reduce(
@@ -194,11 +206,14 @@ export default function DashboardBillingPage() {
 
   const selectedBills = bills.filter((bill) => selectedBillIds.includes(bill._id));
   const selectedBillToRecipients = Array.from(new Set(selectedBills.map((bill) => bill.billToName || bill.billTo).filter(Boolean)));
-  const selectedBillsTotal = selectedBills.reduce((total, bill) => total + Number(bill.balance ?? bill.amount ?? 0), 0);
+  const selectedBillsTotal = selectedBills.reduce((total, bill) => total + Number(bill.amount || 0), 0);
   const canGenerateBillLetter = selectedBills.length > 0 && selectedBillToRecipients.length === 1;
   const periodLabel = fromDate === toDate
     ? formatDate(fromDate)
     : `${formatDate(fromDate)} to ${formatDate(toDate)}`;
+  const selectedMonthLabel = fromDate
+    ? new Date(`${fromDate}T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+    : "";
 
   const openPaymentModal = (bill: BillRow) => {
     setActiveBill(bill);
@@ -296,10 +311,10 @@ export default function DashboardBillingPage() {
               <h1 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">Branch Bills</h1>
               <p className="mt-1 text-sm text-slate-600">View all bills for this branch by date range.</p>
             </div>
- <div className="mb-3">
+            <div className="w-full md:max-w-sm">
           <input
             type="text"
-            placeholder="Search by patient or bill-to..."
+            placeholder="Search by bill-to..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm outline-none ring-blue-500 transition focus:ring-2"
@@ -389,6 +404,7 @@ export default function DashboardBillingPage() {
                   <th className="px-4 py-3 text-left">Transaction ID</th>
                   <th className="px-4 py-3 text-left">Patient</th>
                   <th className="px-4 py-3 text-left">Referrer</th>
+                  <th className="px-4 py-3 text-left">Tests</th>
                   <th className="px-4 py-3 text-left">Bill To</th>
                   <th className="px-4 py-3 text-right">Amount</th>
                   <th className="px-4 py-3 text-right">Paid</th>
@@ -399,24 +415,37 @@ export default function DashboardBillingPage() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
                       Loading bills...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-red-600">
+                    <td colSpan={11} className="px-4 py-10 text-center text-red-600">
                       {error}
                     </td>
                   </tr>
                 ) : filteredBills.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
                       {searchQuery.trim() ? "No bills match your search." : "No bills found for the selected date range."}
                     </td>
                   </tr>
                 ) : (
-                  filteredBills.map((bill) => (
+                  billsByBillTo.flatMap((group) => [
+                    <tr key={`group-${group.key}`} className="bg-slate-50">
+                      <td colSpan={11} className="px-4 py-3 font-semibold text-slate-800">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span>{group.label} <span className="font-normal text-slate-500">({group.bills.length} bill{group.bills.length === 1 ? "" : "s"})</span></span>
+                          <span className="text-xs font-medium text-slate-600">
+                            Amount {formatCurrency(group.bills.reduce((sum, bill) => sum + Number(bill.amount || 0), 0))}
+                            {" · "}Paid {formatCurrency(group.bills.reduce((sum, bill) => sum + Number(bill.paid || 0), 0))}
+                            {" · "}Balance {formatCurrency(group.bills.reduce((sum, bill) => sum + Number(bill.balance || 0), 0))}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>,
+                    ...group.bills.map((bill) => (
                     <tr key={bill._id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 text-center">
                         <input
@@ -431,6 +460,7 @@ export default function DashboardBillingPage() {
                       <td className="whitespace-nowrap px-4 py-3 font-mono text-slate-700">{bill.transId || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">{bill.patient || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-700">{bill.referrer || "-"}</td>
+                      <td className="min-w-48 px-4 py-3 text-slate-700">{bill.tests?.length ? bill.tests.join(", ") : "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-700">{bill.billToName || bill.billTo || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(Number(bill.amount || 0))}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-emerald-700">{formatCurrency(Number(bill.paid || 0))}</td>
@@ -446,7 +476,8 @@ export default function DashboardBillingPage() {
                         </button>
                       </td>
                     </tr>
-                  ))
+                    ))
+                  ])
                 )}
               </tbody>
             </table>
@@ -564,15 +595,44 @@ export default function DashboardBillingPage() {
                 </div>
                 <button type="button" onClick={() => setShowBillLetter(false)} className="text-sm font-semibold text-slate-600 hover:text-slate-900">Close</button>
               </div>
-              <article className="space-y-5 border border-slate-200 p-6 text-sm leading-7 text-slate-800">
+              <article className="space-y-5 border border-slate-200 p-6 text-sm leading-7 text-slate-800 uppercase">
                 <p>{formatLetterDate(new Date())}</p>
                 <div><p>The Manager,</p><p>{selectedBillToRecipients[0]},</p><p>Ughelli,</p><p>Delta State.</p></div>
                 <p>Sir,</p>
-                <p className="font-bold uppercase">Bill for medical investigations done for your clients from {periodLabel}</p>
-                <p>Please find the medical investigation bill of your clients done in <strong>RESONANCE MEDICAL DIAGNOSTICS LTD, UGHELLI</strong> from {periodLabel}.</p>
+                <p className="font-bold">Bill for medical investigations done for your clients from {periodLabel}</p>
+                <p>Please find the medical investigation bill of your clients done in <strong>Resonance Medical Diagnostics Ltd, Ughelli</strong> from {periodLabel}.</p>
+                <p className="font-bold">Medical investigations done for your clients in the month of {selectedMonthLabel}</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left text-xs leading-5">
+                    <thead>
+                      <tr className="border border-slate-500 bg-slate-100">
+                        <th className="border border-slate-500 px-2 py-1">S/N</th>
+                        <th className="border border-slate-500 px-2 py-1">Date</th>
+                        <th className="border border-slate-500 px-2 py-1">Patient</th>
+                        <th className="border border-slate-500 px-2 py-1">Investigations</th>
+                        <th className="border border-slate-500 px-2 py-1 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedBills.map((bill, index) => (
+                        <tr key={bill._id} className="border border-slate-500">
+                          <td className="border border-slate-500 px-2 py-1">{index + 1}</td>
+                          <td className="border border-slate-500 px-2 py-1">{formatDate(bill.businessDate)}</td>
+                          <td className="border border-slate-500 px-2 py-1">{bill.patient || "-"}</td>
+                          <td className="border border-slate-500 px-2 py-1">{bill.tests?.length ? bill.tests.join(", ") : "-"}</td>
+                          <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency(Number(bill.amount || 0))}</td>
+                        </tr>
+                      ))}
+                      <tr className="border border-slate-500 font-bold">
+                        <td colSpan={4} className="border border-slate-500 px-2 py-1 text-right">Total Amount</td>
+                        <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency(selectedBillsTotal)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
                 <p>The total cost of the investigations is <strong>{numberToWords(selectedBillsTotal)} Naira only ({formatCurrency(selectedBillsTotal)})</strong>.</p>
                 <p>We will be grateful if the money is paid to us in cash or into our account.</p>
-                <p><strong>Account details: UNION BANK, RESONANCE DIAGNOSTICS LTD; 0217252732</strong></p>
+                <p><strong>Account details: Union Bank, Resonance Diagnostics Ltd; 0217252732</strong></p>
                 <p>Kind regards.</p>
                 <div><p>Abugu, Jude Ogechukwu</p><p>For Management</p><p>08069999425</p></div>
               </article>
