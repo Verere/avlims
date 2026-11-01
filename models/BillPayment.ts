@@ -20,6 +20,8 @@ export interface IBillPayment extends Document {
   billToName?: string;
   billToRef?: string;
   amount: number;
+  /** True only for money received during the original checkout. */
+  isInitialReceipt?: boolean;
   lines: IBillPaymentLine[];
   status: BillPaymentStatus;
   businessDate: Date;
@@ -56,6 +58,7 @@ const BillPaymentSchema = new Schema<IBillPayment>(
     billToName: { type: String },
     billToRef: { type: String },
     amount: { type: Number, required: true, min: 0 },
+    isInitialReceipt: { type: Boolean, default: false, index: true },
     lines: { type: [BillPaymentLineSchema], required: true, validate: [(v: IBillPaymentLine[]) => v.length > 0, 'At least one payment line is required'] },
     status: { type: String, enum: ['posted', 'reversed'], default: 'posted' },
     businessDate: { type: Date, required: true },

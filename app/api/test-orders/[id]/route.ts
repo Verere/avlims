@@ -9,6 +9,11 @@ import ReferralLedger from "@/models/ReferralLedger";
 import { getToken } from "next-auth/jwt";
 import Referrer from "@/models/Referrer";
 import Lab from "@/models/Lab";
+import Branch from "@/models/Branch";
+import LabMembership from "@/models/LabMembership";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import CategoryWorklistItem from "@/models/CategoryWorklistItem";
 
 export async function GET(
   req: NextRequest,
@@ -16,12 +21,21 @@ export async function GET(
 ) {
   await dbConnect();
   try {
+    const userId = String((await getServerSession(authOptions))?.user?.id || "");
+    if (!userId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     const { id } = await context.params;
     const order = await Order.findById(id).lean();
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
+
+    const branch = order.branchId && mongoose.Types.ObjectId.isValid(String(order.branchId))
+      ? await Branch.findById(order.branchId).select("_id").lean()
+      : null;
+    const lab = branch ? await Lab.findOne({ slug: order.slug, branches: branch._id }).select("_id owner").lean() : null;
+    const allowed = Boolean(lab && (String(lab.owner) === userId || await LabMembership.exists({ user: userId, labId: lab._id, branchId: branch!._id, status: "active" })));
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     return NextResponse.json(order, { status: 200 });
   } catch (error) {
@@ -60,6 +74,7 @@ export async function PATCH(
       const orderObjectId = new mongoose.Types.ObjectId(id);
       const orderIdMatchers = [orderObjectId, id];
       const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      const cancelledById = typeof token?.sub === "string" && mongoose.Types.ObjectId.isValid(token.sub) ? token.sub : undefined;
       const cancelledBy = typeof token?.name === "string"
         ? token.name
         : typeof token?.email === "string"
@@ -118,6 +133,17 @@ export async function PATCH(
           billPaymentCount = billPaymentResult.modifiedCount || 0;
           paymentCount = paymentResult.modifiedCount || 0;
           referralLedgerCount = referralLedgerResult.modifiedCount || 0;
+
+          const worklistItems: any[] = await CategoryWorklistItem.find({ orderId: id }).session(session);
+          for (const item of worklistItems) {
+            const previousStatus = String(item.status);
+            item.status = "Cancelled";
+            item.eligibleForProcessing = false;
+            item.eligibilityReason = "The patient order was cancelled";
+            if (cancelledById) item.updatedBy = cancelledById as never;
+            item.history.push({ action: "order_cancelled", fromStatus: previousStatus, toStatus: "Cancelled", reason: item.eligibilityReason, ...(cancelledById ? { staffId: cancelledById as never } : {}), staffName: cancelledBy || "Staff", at: cancelledAt });
+            await item.save({ session });
+          }
         });
 
         return NextResponse.json(

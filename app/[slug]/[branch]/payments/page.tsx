@@ -110,11 +110,12 @@ export default function PaymentsPage() {
               if (p.method === "cash") acc.totalCash += Number(p.amount || 0);
               if (p.method === "pos") acc.totalPos += Number(p.amount || 0);
               if (p.method === "transfer") acc.totalTransfer += Number(p.amount || 0);
+              if (p.method === "other") acc.totalOther += Number(p.amount || 0);
             }
           }
           return acc;
         },
-        { totalPayment: 0, totalCash: 0, totalPos: 0, totalTransfer: 0 }
+        { totalPayment: 0, totalCash: 0, totalPos: 0, totalTransfer: 0, totalOther: 0 }
       ),
     [filteredPayments]
   );
@@ -145,6 +146,10 @@ export default function PaymentsPage() {
             <div className="bg-purple-50 rounded px-3 py-2 text-center">
               <div className="text-xs text-gray-500">Total Transfer</div>
               <div className="text-base font-bold text-purple-700">{formatCurrency(totals.totalTransfer)}</div>
+            </div>
+            <div className="bg-slate-50 rounded px-3 py-2 text-center">
+              <div className="text-xs text-gray-500">Other</div>
+              <div className="text-base font-bold text-slate-700">{formatCurrency(totals.totalOther)}</div>
             </div>
           </div>
         )}

@@ -19,6 +19,8 @@ type PaymentRow = {
 	payments?: PaymentEntry[];
 };
 
+const paymentMethods = ["cash", "pos", "transfer", "other"] as const;
+
 function formatCurrency(value: number) {
 	return new Intl.NumberFormat("en-NG", {
 		style: "currency",
@@ -72,6 +74,40 @@ export default function DashboardPaymentsPage() {
 	const [rows, setRows] = useState<PaymentRow[]>([]);
 	const [loading, setLoading] = useState<boolean>(true);
 	const [error, setError] = useState<string>("");
+	const [editingEntry, setEditingEntry] = useState<{ paymentId: string; entryIndex: number; method: string } | null>(null);
+	const [savingEntry, setSavingEntry] = useState(false);
+	const [editError, setEditError] = useState("");
+
+	const savePaymentMethod = async () => {
+		if (!editingEntry) return;
+		const row = rows.find((item) => item._id === editingEntry.paymentId);
+		if (!row?.branchId) {
+			setEditError("Could not identify the branch for this payment.");
+			return;
+		}
+		setSavingEntry(true);
+		setEditError("");
+		try {
+			const res = await fetch("/api/payments", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					paymentId: editingEntry.paymentId,
+					branchId: row.branchId,
+					entryIndex: editingEntry.entryIndex,
+					method: editingEntry.method,
+				}),
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error(data.error || "Failed to update payment method");
+			setRows((current) => current.map((item) => item._id === data._id ? data : item));
+			setEditingEntry(null);
+		} catch (e: any) {
+			setEditError(e?.message || "Failed to update payment method");
+		} finally {
+			setSavingEntry(false);
+		}
+	};
 
 	useEffect(() => {
 		let isMounted = true;
@@ -135,11 +171,12 @@ export default function DashboardPaymentsPage() {
 					if (method === "cash") acc.cash += amount;
 					if (method === "pos") acc.pos += amount;
 					if (method === "transfer") acc.transfer += amount;
+					if (method === "other") acc.other += amount;
 				}
 
 				return acc;
 			},
-			{ total: 0, cash: 0, pos: 0, transfer: 0 }
+			{ total: 0, cash: 0, pos: 0, transfer: 0, other: 0 }
 		);
 	}, [rows]);
 
@@ -174,7 +211,7 @@ export default function DashboardPaymentsPage() {
 						</div>
 					</div>
 
-					<div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+					<div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
 						<div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
 							<p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Total Payment</p>
 							<p className="mt-1 text-lg font-bold text-blue-900">{formatCurrency(totals.total)}</p>
@@ -190,6 +227,10 @@ export default function DashboardPaymentsPage() {
 						<div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
 							<p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Transfer</p>
 							<p className="mt-1 text-lg font-bold text-indigo-900">{formatCurrency(totals.transfer)}</p>
+						</div>
+						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+							<p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Other</p>
+							<p className="mt-1 text-lg font-bold text-slate-800">{formatCurrency(totals.other)}</p>
 						</div>
 					</div>
 				</div>
@@ -228,15 +269,31 @@ export default function DashboardPaymentsPage() {
 									</tr>
 								) : (
 									rows.map((row, idx) => {
-										const paymentsDisplay = Array.isArray(row.payments) && row.payments.length > 0
-											? row.payments.map((entry) => `${String(entry.method || "-").toUpperCase()}: ${formatCurrency(Number(entry.amount || 0))}`).join(", ")
-											: "-";
+										const paymentEntries = Array.isArray(row.payments) ? row.payments : [];
 
 										return (
 											<tr key={row._id || `${row.orderId || "row"}-${idx}`} className="hover:bg-slate-50">
 												<td className="whitespace-nowrap px-4 py-3 font-mono text-slate-700">{row.transactionId || "-"}</td>
 												<td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">{row.name || "-"}</td>
-												<td className="px-4 py-3 text-slate-700">{paymentsDisplay}</td>
+												<td className="px-4 py-3 text-slate-700">
+													{paymentEntries.length ? <div className="space-y-2">{paymentEntries.map((entry, entryIndex) => {
+														const isEditing = editingEntry?.paymentId === row._id && editingEntry.entryIndex === entryIndex;
+														return <div key={`${row._id}-${entryIndex}`} className="flex flex-wrap items-center gap-2">
+															{isEditing ? <>
+															<select value={editingEntry.method} onChange={(event) => setEditingEntry((current) => current ? { ...current, method: event.target.value } : current)} disabled={savingEntry} aria-label="Payment method" className="rounded border border-slate-300 bg-white px-2 py-1 text-xs">
+																{paymentMethods.map((method) => <option key={method} value={method}>{method.toUpperCase()}</option>)}
+															</select>
+																<span>{formatCurrency(Number(entry.amount || 0))}</span>
+																<button type="button" onClick={savePaymentMethod} disabled={savingEntry} className="text-xs font-semibold text-blue-700 disabled:opacity-50">{savingEntry ? "Saving…" : "Save"}</button>
+																<button type="button" onClick={() => { setEditingEntry(null); setEditError(""); }} disabled={savingEntry} className="text-xs text-slate-500">Cancel</button>
+															</> : <>
+																<span>{String(entry.method || "-").toUpperCase()}: {formatCurrency(Number(entry.amount || 0))}</span>
+																<button type="button" onClick={() => { setEditingEntry({ paymentId: row._id, entryIndex, method: String(entry.method || "cash").toLowerCase() }); setEditError(""); }} className="text-xs font-semibold text-blue-700 hover:text-blue-900">Edit</button>
+															</>}
+														</div>;
+													})}</div> : "-"}
+													{editError && editingEntry?.paymentId === row._id ? <p className="mt-1 text-xs text-red-600">{editError}</p> : null}
+												</td>
 												<td className="whitespace-nowrap px-4 py-3 text-slate-700">{row.user || "-"}</td>
 												<td className="whitespace-nowrap px-4 py-3 text-slate-700">{formatDate(row.businessDate)}</td>
 												<td className="whitespace-nowrap px-4 py-3 text-slate-700">{formatTime(row.businessDate)}</td>

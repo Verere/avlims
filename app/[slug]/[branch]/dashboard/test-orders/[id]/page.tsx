@@ -9,6 +9,14 @@ type TestItem = {
   name: string;
   price: number;
   quantity: number;
+  requires_specimen_collection?: boolean;
+  specimen_type?: string;
+  container_type?: string;
+  collection_method?: string;
+  collection_instructions?: string;
+  collection_priority?: string;
+  collection_config_status?: string;
+  collection_status?: string;
   panel?: {
     id: string;
     name: string;
@@ -23,6 +31,7 @@ type TestOrder = {
   gender?: string;
   name?: string;
   amount?: number;
+  amountDue?: number;
   amountPaid?: number;
   bal?: number;
   status?: string;
@@ -125,15 +134,12 @@ export default function DashboardTestOrderDetailsPage() {
   }, [branch, orderId]);
 
   const testsSummary = useMemo(() => {
-    if (!order?.tests || order.tests.length === 0) return [] as string[];
+    if (!order?.tests || order.tests.length === 0) return [] as Array<{ label: string; item: TestItem }>;
 
     return order.tests.map((item) => {
       const qty = Number(item.quantity || 1);
       const base = `${item.name} x${qty}`;
-      if (item.panel?.name) {
-        return `${base} (${item.panel.name})`;
-      }
-      return base;
+      return { label: item.panel?.name ? `${base} (${item.panel.name})` : base, item };
     });
   }, [order]);
 
@@ -247,7 +253,7 @@ export default function DashboardTestOrderDetailsPage() {
         })
         .join("");
       const orderDate = order.bDate || order.createdAt;
-      const total = Number(order.amount || 0);
+      const total = Number(order.amountDue ?? Math.max(Number(order.amount || 0) - Number(order.discount || 0), 0));
       const paid = Number(order.amountPaid || 0);
       const balance = Number(order.bal ?? total - paid);
 
@@ -375,9 +381,13 @@ export default function DashboardTestOrderDetailsPage() {
                 {testsSummary.length === 0 ? (
                   <p className="text-sm text-slate-500">No tests captured for this order.</p>
                 ) : (
-                  testsSummary.map((item, index) => (
-                    <div key={`${item}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-800">
-                      {item}
+                  testsSummary.map(({ label, item }, index) => (
+                    <div key={`${label}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                      <div>{label}</div>
+                      <div className="mt-1 text-xs text-slate-600">
+                        Collection: {item.collection_status ? item.collection_status.replace(/_/g, " ") : "not recorded"}
+                        {item.collection_config_status !== "configured" ? " · catalogue setup needs review" : item.requires_specimen_collection ? ` · ${item.specimen_type || "specimen"} · ${item.container_type || "container not set"}` : " · collection not required"}
+                      </div>
                     </div>
                   ))
                 )}
@@ -390,7 +400,7 @@ export default function DashboardTestOrderDetailsPage() {
             <div className="mt-4 space-y-3">
               <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-blue-600">Amount</p>
-                <p className="mt-1 text-lg font-black text-blue-900">{formatCurrency(order.amount)}</p>
+                <p className="mt-1 text-lg font-black text-blue-900">{formatCurrency(Number(order.amountDue ?? Math.max(Number(order.amount || 0) - Number(order.discount || 0), 0)))}</p>
               </div>
               <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-emerald-600">Paid</p>

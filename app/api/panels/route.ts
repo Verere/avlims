@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     if (isActive === 'false') query.isActive = false;
 
     const panels = await Panel.find(query)
-      .populate('tests', 'name code price type resultType')
+      .populate('tests', 'name code price type resultType requires_specimen_collection specimen_type container_type collection_method collection_instructions collection_priority collection_config_status')
       .sort({ createdAt: -1 });
 
     return NextResponse.json(panels, { status: 200 });

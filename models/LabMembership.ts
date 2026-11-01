@@ -8,6 +8,7 @@ export interface ILabMembership extends Document {
   branch?: string;
   name: string;
   permissions: string[];
+  worklistCategoryIds?: Types.ObjectId[];
   status: 'active' | 'inactive';
   role: string;
   user: Types.ObjectId;
@@ -25,6 +26,7 @@ const LabMembershipSchema = new Schema<ILabMembership>({
   branch: { type: String },
   name: { type: String, required: true },
   permissions: [{ type: String, required: true }],
+  worklistCategoryIds: [{ type: Schema.Types.ObjectId, ref: 'Category' }],
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   role: { type: String, required: true },
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -34,4 +36,9 @@ const LabMembershipSchema = new Schema<ILabMembership>({
 // Ensure a user can only have one membership per lab+branch
 LabMembershipSchema.index({ user: 1, lab: 1, branch: 1 }, { unique: true });
 
-export default mongoose.models.LabMembership || mongoose.model<ILabMembership>('LabMembership', LabMembershipSchema);
+const existingLabMembershipModel = mongoose.models.LabMembership as mongoose.Model<ILabMembership> | undefined;
+if (existingLabMembershipModel && !existingLabMembershipModel.schema.path('worklistCategoryIds')) {
+  existingLabMembershipModel.schema.add({ worklistCategoryIds: [{ type: Schema.Types.ObjectId, ref: 'Category' }] });
+}
+
+export default existingLabMembershipModel || mongoose.model<ILabMembership>('LabMembership', LabMembershipSchema);

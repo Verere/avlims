@@ -3,6 +3,8 @@ import { dbConnect } from '../../../lib/mongodb';
 import Bill from '../../../models/Bill';
 import Order from '../../../models/Order';
 import { writeAuditLog } from '@/lib/audit';
+import BillPayment from '@/models/BillPayment';
+import mongoose from 'mongoose';
 
 export async function GET(req: NextRequest) {
   await dbConnect();
@@ -80,16 +82,47 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Missing required field: ${field}` }, { status: 400 });
       }
     }
-    const bill = await Bill.create(body);
-    await writeAuditLog(req, {
-      action: 'create',
-      entityType: 'Bill',
-      entityId: bill._id,
-      labId: body.labId,
-      branchId: body.branchId,
-      changes: { orderId: body.orderId, amount: body.amount, paid: body.paid, balance: body.balance },
-    });
-    return NextResponse.json(bill, { status: 201 });
+    const initialLines = Array.isArray(body.initialPaymentLines) ? body.initialPaymentLines : [];
+    const billAmount = Number(body.amount);
+    const initialPaid = Number(body.paid || 0);
+    if (!Number.isFinite(billAmount) || billAmount <= 0 || !Number.isFinite(initialPaid) || initialPaid < 0 || initialPaid > billAmount) {
+      return NextResponse.json({ error: 'amount must be positive and paid must be between zero and amount' }, { status: 400 });
+    }
+    if (initialPaid > 0 && (!initialLines.length || initialLines.some((line: any) => !['cash', 'pos', 'transfer', 'other'].includes(String(line?.method || '').toLowerCase()) || !Number.isFinite(Number(line?.amount)) || Number(line.amount) < 0) || Math.abs(initialLines.reduce((sum: number, line: any) => sum + Number(line.amount), 0) - initialPaid) > 0.01)) {
+      return NextResponse.json({ error: 'Initial payment lines must match the amount paid' }, { status: 400 });
+    }
+    const session = await mongoose.startSession();
+    let bill: any;
+    let billCreated = false;
+    try {
+      await session.withTransaction(async () => {
+        bill = await Bill.findOne({ orderId: body.orderId }).session(session);
+        if (!bill) {
+          [bill] = await Bill.create([{ ...body, paid: initialPaid, issuedCredit: Math.max(Number(body.amount) - initialPaid, 0), balance: Math.max(Number(body.amount) - initialPaid, 0) }], { session });
+          billCreated = true;
+        }
+        const existingReceipts = await BillPayment.countDocuments({ billId: bill._id, status: 'posted', isCancelled: { $ne: true } }).session(session);
+        if (initialPaid > 0 && existingReceipts === 0) {
+          await BillPayment.create([{
+            billId: bill._id, orderId: bill.orderId, labId: bill.labId, branchId: bill.branchId,
+            patient: bill.patient, referrer: bill.referrer, billTo: bill.billTo, billToName: bill.billToName,
+            billToRef: bill.billToRef, amount: initialPaid, isInitialReceipt: true, lines: initialLines, status: 'posted',
+            businessDate: bill.businessDate, userId: body.userId || undefined, user: body.user || 'system',
+            note: 'Initial payment at bill creation',
+          }], { session });
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
+    if (billCreated) {
+      await writeAuditLog(req, {
+        action: 'create', entityType: 'Bill', entityId: bill._id,
+        labId: body.labId, branchId: body.branchId,
+        changes: { orderId: body.orderId, amount: body.amount, paid: body.paid, balance: body.balance },
+      });
+    }
+    return NextResponse.json(bill, { status: billCreated ? 201 : 200 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }

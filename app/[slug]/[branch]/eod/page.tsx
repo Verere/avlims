@@ -18,11 +18,13 @@ type BillRow = {
   amount?: number;
   paid?: number;
   balance?: number;
+  issuedCredit?: number;
   businessDate?: string;
 };
 
 type BillPaymentRow = {
   _id: string;
+  isInitialReceipt?: boolean;
   amount?: number;
   lines?: Array<{ method?: string; amount?: number }>;
   createdAt?: string;
@@ -31,7 +33,13 @@ type BillPaymentRow = {
 type OrderRow = {
   _id: string;
   revenue?: number;
+  amountDue?: number;
+  checkoutPaid?: number;
+  checkoutCredit?: number;
+  amountPaid?: number;
+  bal?: number;
   amount?: number;
+  discount?: number;
   bDate?: string;
   createdAt?: string;
 };
@@ -315,10 +323,11 @@ export default function EndOfDayPage() {
           if (method === "cash") acc.cash += amount;
           else if (method === "pos") acc.pos += amount;
           else if (method === "transfer") acc.transfer += amount;
+          else if (method === "other") acc.other += amount;
         }
         return acc;
       },
-      { cash: 0, pos: 0, transfer: 0 }
+      { cash: 0, pos: 0, transfer: 0, other: 0 }
     );
 
     const billPaymentMethodTotals = billPayments.reduce(
@@ -331,6 +340,7 @@ export default function EndOfDayPage() {
             if (method === 'cash') acc.cash += amount;
             else if (method === 'pos') acc.pos += amount;
             else if (method === 'transfer') acc.transfer += amount;
+            else if (method === 'other') acc.other += amount;
           }
           return acc;
         }
@@ -342,7 +352,7 @@ export default function EndOfDayPage() {
 
         return acc;
       },
-      { cash: 0, pos: 0, transfer: 0 }
+      { cash: 0, pos: 0, transfer: 0, other: 0 }
     );
 
     const totalPayment = payments.reduce((sum, row) => {
@@ -363,12 +373,19 @@ export default function EndOfDayPage() {
       return sum + byLines;
     }, 0);
 
-    const totalCredit = bills.reduce((sum, row) => sum + Number(row.balance || 0), 0);
+    const initialBillReceipts = billPayments.filter((row) => row.isInitialReceipt).reduce((sum, row) => {
+      const lines = Array.isArray(row.lines) ? row.lines : [];
+      return sum + (lines.length ? lines.reduce((lineSum, line) => lineSum + Number(line.amount || 0), 0) : Number(row.amount || 0));
+    }, 0);
+    const checkoutCollected = orders.reduce((sum, row) => sum + Number(row.checkoutPaid ?? row.amountPaid ?? 0), 0);
+
+    const totalCredit = orders.reduce((sum, row) => sum + Number(row.checkoutCredit ?? row.bal ?? 0), 0);
 
     const totalRevenue = orders.reduce(
-      (sum, row) => sum + Number(row.revenue ?? row.amount ?? 0),
+      (sum, row) => sum + Number(row.amountDue ?? Math.max(Number(row.amount || 0) - Number(row.discount || 0), 0)),
       0
     );
+    const totalDiscounts = orders.reduce((sum, row) => sum + Number(row.discount || 0), 0);
 
     const totalExpenses = Number(expenses?.totalExpenses || 0);
     const cashExpenses = (expenses?.expenses || []).reduce((total, expense) =>
@@ -391,8 +408,10 @@ export default function EndOfDayPage() {
     return {
       totalPayment,
       totalBillPayment,
+      checkoutCollected,
       totalCredit,
       totalRevenue,
+      totalDiscounts,
       totalExpenses,
       cashExpenses,
       cashBanked,
@@ -402,9 +421,11 @@ export default function EndOfDayPage() {
       cash: paymentMethodTotals.cash,
       pos: paymentMethodTotals.pos,
       transfer: paymentMethodTotals.transfer,
+      other: paymentMethodTotals.other,
       billPaymentCash: billPaymentMethodTotals.cash,
       billPaymentPos: billPaymentMethodTotals.pos,
       billPaymentTransfer: billPaymentMethodTotals.transfer,
+      billPaymentOther: billPaymentMethodTotals.other,
     };
   }, [payments, billPayments, bills, orders, expenses, cashMovements]);
 
@@ -434,6 +455,7 @@ export default function EndOfDayPage() {
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-blue-500 transition focus:ring-2"
                 />
+                {loading ? <span className="mt-1 inline-flex items-center gap-2 text-xs font-medium text-blue-700" role="status" aria-live="polite"><svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Updating summary…</span> : null}
               </label>
               <button
                 type="button"
@@ -457,7 +479,7 @@ export default function EndOfDayPage() {
         {bankCashSuccess ? <div className="mb-4 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{bankCashSuccess}</div> : null}
         {closingSuccess ? <div className="mb-4 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{closingSuccess}</div> : null}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Total Payment (Payments)</p>
             <p className="mt-1 text-xl font-bold text-blue-900">{formatCurrency(totals.totalPayment)}</p>
@@ -466,13 +488,21 @@ export default function EndOfDayPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Total Bill Payments</p>
             <p className="mt-1 text-xl font-bold text-cyan-900">{formatCurrency(totals.totalBillPayment)}</p>
           </div>
+          <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Checkout Collected</p>
+            <p className="mt-1 text-xl font-bold text-violet-900">{formatCurrency(totals.checkoutCollected)}</p>
+          </div>
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Total Credit (Bills)</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Credit Issued</p>
             <p className="mt-1 text-xl font-bold text-indigo-900">{formatCurrency(totals.totalCredit)}</p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Total Revenue (Orders)</p>
             <p className="mt-1 text-xl font-bold text-emerald-900">{formatCurrency(totals.totalRevenue)}</p>
+          </div>
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Total Discounts</p>
+            <p className="mt-1 text-xl font-bold text-rose-900">{formatCurrency(totals.totalDiscounts)}</p>
           </div>
           <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Total Expenses</p>
@@ -480,7 +510,7 @@ export default function EndOfDayPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cash Received</p>
             <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(totals.cashReceived)}</p>
@@ -492,6 +522,10 @@ export default function EndOfDayPage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Transfer</p>
             <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(totals.transfer)}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Other Payments</p>
+            <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(totals.other)}</p>
           </div>
         </div>
 
@@ -515,7 +549,7 @@ export default function EndOfDayPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Bill Payments Cash</p>
             <p className="mt-1 text-lg font-bold text-cyan-900">{formatCurrency(totals.billPaymentCash)}</p>
@@ -527,6 +561,10 @@ export default function EndOfDayPage() {
           <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Bill Payments Transfer</p>
             <p className="mt-1 text-lg font-bold text-cyan-900">{formatCurrency(totals.billPaymentTransfer)}</p>
+          </div>
+          <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Bill Payments Other</p>
+            <p className="mt-1 text-lg font-bold text-cyan-900">{formatCurrency(totals.billPaymentOther)}</p>
           </div>
         </div>
 

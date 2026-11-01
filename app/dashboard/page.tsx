@@ -17,11 +17,11 @@ export default async function Dashboard() {
   const user = session?.user;
   let labMembership = null;
   let labs = [];
-  let memberships = [];
+  let memberships: Awaited<ReturnType<typeof getUserLabMemberships>> = [];
   if (user) {
     await dbConnect();
     // Find all memberships for the user
-    memberships = await (await import("./lab/memberships/actions")).getUserLabMemberships();
+    memberships = await getUserLabMemberships();
     labMembership = await LabMembership.findOne({ user: user.id });
     let ownerId = null;
     if (labMembership) {

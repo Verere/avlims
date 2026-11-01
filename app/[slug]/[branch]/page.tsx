@@ -26,6 +26,23 @@ import { getReferralBonusAmountForItem, type ReferralBonusPolicy } from "@/lib/r
 type DiscountMode = "percent" | "fixed";
 type PaymentMethod = "cash" | "transfer" | "pos";
 
+function registrationKeyFor(payload: any) {
+	const signature = JSON.stringify({
+		patientId: payload.patientId, slug: payload.slug, branch: payload.branch, branchId: payload.branchId,
+		billTo: payload.billTo, status: payload.status, amount: payload.amount,
+		tests: (payload.tests || []).map((test: any) => [test.id, test.quantity, test.price]),
+	});
+	let hash = 2166136261;
+	for (let index = 0; index < signature.length; index += 1) hash = Math.imul(hash ^ signature.charCodeAt(index), 16777619);
+	const storageKey = `pending-order-registration:${(hash >>> 0).toString(36)}`;
+	let key = sessionStorage.getItem(storageKey);
+	if (!key) {
+		key = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+		sessionStorage.setItem(storageKey, key);
+	}
+	return { key, storageKey };
+}
+
 export default function LaboratoryRegistrationPage() {
 	const pathname = usePathname();
 	// Bill To state
@@ -139,7 +156,8 @@ export default function LaboratoryRegistrationPage() {
 		return discountValue;
 	}, [discountEnabled, discountMode, discountValue, subtotal]);
 	const total = useMemo(() => Math.max(subtotal - discount, 0), [subtotal, discount]);
-	const revenue = useMemo(() => Math.max(total - bonus, 0), [total, bonus]);
+	// Revenue is the discounted amount charged. Referral bonus is a separate cost.
+	const revenue = useMemo(() => total, [total]);
 	const totalPaid = useMemo(() => payments.reduce((sum, p) => sum + p.amount, 0), [payments]);
 	const balance = useMemo(() => total - totalPaid, [total, totalPaid]);
 	const showBonus = useMemo(() => {
@@ -473,7 +491,7 @@ export default function LaboratoryRegistrationPage() {
 			}
 
 			// 4. Prepare order payload
-			const orderPayload = {
+			const orderPayload: Record<string, any> = {
 				patientId: selectedPatient.id,
 				gender: selectedPatient.gender,
 				name: selectedPatient.name,
@@ -491,6 +509,10 @@ export default function LaboratoryRegistrationPage() {
 						: undefined,
 				})),
 				amount: subtotal,
+				subtotal,
+				amountDue: total,
+				checkoutPaid: totalPaid,
+				checkoutCredit: Math.max(balance, 0),
 				amountPaid: totalPaid,
 				bal: balance,
 				clinic: cartReferrer.refClinic || "",
@@ -513,6 +535,8 @@ export default function LaboratoryRegistrationPage() {
 			};
 
 			// 5. Create order first
+			const registration = registrationKeyFor(orderPayload);
+			orderPayload.registrationKey = registration.key;
 			const orderRes = await fetch("/api/test-orders", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -602,6 +626,7 @@ export default function LaboratoryRegistrationPage() {
 			}, receiptWindow);
 
 			toast.success("Payment and order completed!");
+			sessionStorage.removeItem(registration.storageKey);
 			// Optionally clear state
 			setCart([]);
 			setItemBonuses({});
@@ -703,7 +728,7 @@ export default function LaboratoryRegistrationPage() {
 			}
 
 			// 4. Prepare order payload
-			const orderPayload = {
+			const orderPayload: Record<string, any> = {
 				patientId: selectedPatient.id,
 				gender: selectedPatient.gender,
 				name: selectedPatient.name,
@@ -721,6 +746,10 @@ export default function LaboratoryRegistrationPage() {
 						: undefined,
 				})),
 				amount: subtotal,
+				subtotal,
+				amountDue: total,
+				checkoutPaid: totalPaid,
+				checkoutCredit: Math.max(balance, 0),
 				amountPaid: totalPaid,
 				bal: balance,
 				clinic: cartReferrer.refClinic || "",
@@ -743,6 +772,8 @@ export default function LaboratoryRegistrationPage() {
 			};
 
 			// 5. Create order first
+			const registration = registrationKeyFor(orderPayload);
+			orderPayload.registrationKey = registration.key;
 			const orderRes = await fetch("/api/test-orders", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -774,7 +805,8 @@ export default function LaboratoryRegistrationPage() {
 				patient: selectedPatient.name,
 				referrer: cartReferrer.referrer?.name || "",
 				branchId: branchId,
-				amount: subtotal,
+				amount: total,
+				issuedCredit: Math.max(total - totalPaid, 0),
 				paid: totalPaid,
 				balance: balance,
 				orderId: orderData._id || orderData.id,
@@ -783,6 +815,9 @@ export default function LaboratoryRegistrationPage() {
 				billTo: billToForBill,
 				billToName: resolvedBillToName,
 				billToRef: resolvedBillToRef,
+				initialPaymentLines: payments.filter((payment) => Number(payment.amount) > 0),
+				userId: user.id,
+				user: user.name,
 			};
 			const billRes = await fetch("/api/bill", {
 				method: "POST",
@@ -794,32 +829,6 @@ export default function LaboratoryRegistrationPage() {
 				throw new Error(err.error || "Bill creation failed");
 			}
 			const billData = await billRes.json();
-
-			if (totalPaid > 0) {
-				const paymentRes = await fetch("/api/payments", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						labId: branchDoc.lab || branchDoc._id,
-						name: selectedPatient.name,
-						amount: totalPaid,
-						userId: user.id,
-						user: user.name,
-						branchId,
-						payments: payments.filter((payment) => payment.amount > 0),
-						branch: pathname.split("/")[2],
-						patient: selectedPatient.id,
-						slug: branchSlug,
-						orderId: orderData._id || orderData.id,
-						bDate: orderData.bDate,
-						transactionId: orderData.transId,
-					}),
-				});
-				if (!paymentRes.ok) {
-					const err = await paymentRes.json();
-					throw new Error(err.error || "Payment failed");
-				}
-			}
 
 			const groupedItems = new Map<string, { name: string; amount: number }>();
 			for (const entry of cart) {
@@ -880,6 +889,7 @@ export default function LaboratoryRegistrationPage() {
 			}
 
 			toast.success("Bill created!");
+			sessionStorage.removeItem(registration.storageKey);
 			// Optionally clear state
 			setCart([]);
 			setItemBonuses({});

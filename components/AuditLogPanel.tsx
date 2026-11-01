@@ -75,6 +75,12 @@ function getEventSummary(event: AuditEvent) {
     return event.metadata.summary;
   }
 
+  if (event.entityType === "Payment" && typeof event.metadata?.summary === "string") {
+    const transactionId = event.metadata.transactionId ? ` · Transaction ${String(event.metadata.transactionId)}` : "";
+    const patient = event.metadata.patient ? ` · ${String(event.metadata.patient)}` : "";
+    return `${event.metadata.summary}${transactionId}${patient}`;
+  }
+
   const patientName = event.changes?.patientName as { before?: unknown; after?: unknown } | undefined;
   if (patientName?.after) return `Patient: ${String(patientName.after)}`;
 

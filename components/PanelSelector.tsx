@@ -17,6 +17,13 @@ type PanelApi = {
     name?: string;
     category?: string;
     price?: number;
+    requires_specimen_collection?: boolean;
+    specimen_type?: string;
+    container_type?: string;
+    collection_method?: string;
+    collection_instructions?: string;
+    collection_priority?: "routine" | "urgent" | "stat" | "other";
+    collection_config_status?: "needs_review" | "configured";
   }>;
 };
 
@@ -24,6 +31,13 @@ type Props = {
   cart: CartItem[];
   onAddPanelTests: (panel: { id: string; name: string; price: number }, tests: LabTest[]) => void;
 };
+
+const specimenTypes = new Set(["blood", "serum", "plasma", "urine", "stool", "sputum", "swab", "tissue", "semen", "other"]);
+
+function normalizeSpecimenType(value?: string): LabTest["specimen_type"] {
+  const normalized = String(value || "").trim().toLowerCase();
+  return specimenTypes.has(normalized) ? normalized as LabTest["specimen_type"] : undefined;
+}
 
 export default function PanelSelector({ cart, onAddPanelTests }: Props) {
   const [query, setQuery] = useState("");
@@ -107,6 +121,13 @@ export default function PanelSelector({ cart, onAddPanelTests }: Props) {
                 name: t.name || "Unnamed Test",
                 category: t.category || panel.category || "",
                 price: Number(t.price || 0),
+                requires_specimen_collection: t.requires_specimen_collection === true,
+                specimen_type: normalizeSpecimenType(t.specimen_type),
+                container_type: t.container_type || "",
+                collection_method: t.collection_method || "",
+                collection_instructions: t.collection_instructions || "",
+                collection_priority: t.collection_priority || "routine",
+                collection_config_status: t.collection_config_status || "needs_review",
               }))
               .filter((t) => t.id);
 

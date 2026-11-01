@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 
 import Payment, { IPayment } from '../../../models/Payment';
+import Bill from '@/models/Bill';
 import ReferralLedger from '../../../models/ReferralLedger';
 import { dbConnect } from '../../../lib/mongodb';
 import { writeAuditLog } from '@/lib/audit';
@@ -19,10 +20,73 @@ export async function GET(req: NextRequest) {
       query.isCancelled = isCancelled === "true";
     }
     const payments = await Payment.find(query).sort({ createdAt: -1 });
-    console.log('Fetched', payments);
-    return NextResponse.json(payments, { status: 200 });
+    const orderIds = payments.reduce<mongoose.Types.ObjectId[]>((ids, payment) => {
+      if (payment.orderId) ids.push(payment.orderId);
+      return ids;
+    }, []);
+    const billedOrderIds = orderIds.length
+      ? await Bill.find({ orderId: { $in: orderIds } }).distinct('orderId')
+      : [];
+    const billedOrders = new Set(billedOrderIds.map(String));
+    const standalonePayments = payments.filter((payment) => !payment.orderId || !billedOrders.has(String(payment.orderId)));
+    return NextResponse.json(standalonePayments, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  await dbConnect();
+  try {
+    const body = await req.json();
+    const { paymentId, branchId, entryIndex, method } = body || {};
+    const normalizedMethod = String(method || "").trim().toLowerCase();
+    const allowedMethods = ["cash", "pos", "transfer", "other"];
+
+    if (!mongoose.isValidObjectId(paymentId) || !mongoose.isValidObjectId(branchId)) {
+      return NextResponse.json({ error: "Invalid payment or branch ID" }, { status: 400 });
+    }
+    if (!Number.isInteger(entryIndex) || entryIndex < 0) {
+      return NextResponse.json({ error: "Invalid payment entry index" }, { status: 400 });
+    }
+    if (!allowedMethods.includes(normalizedMethod)) {
+      return NextResponse.json({ error: "Invalid payment method" }, { status: 400 });
+    }
+
+    const payment = await Payment.findOne({ _id: paymentId, branchId });
+    if (!payment) return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+    const entries = payment.payments as Array<{ method: string; amount: number }>;
+    if (!Array.isArray(entries) || !entries[entryIndex]) {
+      return NextResponse.json({ error: "Payment entry not found" }, { status: 404 });
+    }
+
+    const previousMethod = entries[entryIndex].method;
+    entries[entryIndex].method = normalizedMethod;
+    payment.markModified("payments");
+    await payment.save();
+
+    await writeAuditLog(req, {
+      action: "update",
+      entityType: "Payment",
+      entityId: payment._id,
+      labId: String(payment.lab),
+      branchId: String(payment.branchId),
+      changes: {
+        orderId: payment.orderId,
+        paymentEntryIndex: entryIndex,
+        amount: entries[entryIndex].amount,
+        method: { from: previousMethod, to: normalizedMethod },
+      },
+      metadata: {
+        summary: `Payment method changed from ${String(previousMethod || "unknown").toUpperCase()} to ${normalizedMethod.toUpperCase()}`,
+        transactionId: payment.transactionId,
+        patient: payment.name,
+      },
+    });
+
+    return NextResponse.json(payment, { status: 200 });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message || "Failed to update payment method" }, { status: 500 });
   }
 }
 
@@ -42,6 +106,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Missing required field: ${field}` }, { status: 400 });
       }
     }
+    const paymentLines = Array.isArray(body.payments) ? body.payments : [];
+    const allowedMethods = ['cash', 'pos', 'transfer', 'other'];
+    if (!paymentLines.length || paymentLines.some((line: any) => !allowedMethods.includes(String(line?.method || '').trim().toLowerCase()) || !Number.isFinite(Number(line?.amount)) || Number(line.amount) < 0)) {
+      return NextResponse.json({ error: 'payments must contain valid methods and non-negative amounts' }, { status: 400 });
+    }
+    const declaredAmount = Number(body.amount);
+    const linesTotal = paymentLines.reduce((sum: number, line: any) => sum + Number(line.amount), 0);
+    if (!Number.isFinite(declaredAmount) || declaredAmount < 0 || Math.abs(linesTotal - declaredAmount) > 0.01) {
+      return NextResponse.json({ error: 'Payment lines must add up to amount' }, { status: 400 });
+    }
     const referralLedger = body.referralLedger;
     if (referralLedger && (!referralLedger.referrer || !Array.isArray(referralLedger.tests))) {
       return NextResponse.json({ error: 'A referral ledger requires a referrer and tests' }, { status: 400 });
@@ -53,9 +127,7 @@ export async function POST(req: NextRequest) {
       paymentCreated: false,
     };
     await session.withTransaction(async () => {
-      transactionResult.payment = body.isFullPayment
-        ? await Payment.findOne({ orderId: body.orderId, isFullPayment: true }).session(session!)
-        : null;
+      transactionResult.payment = await Payment.findOne({ orderId: body.orderId, isCancelled: { $ne: true } }).session(session!);
       if (!transactionResult.payment) {
         const [createdPayment] = await Payment.create([{
           lab: body.labId,

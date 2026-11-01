@@ -59,6 +59,8 @@ export async function GET(request: NextRequest) {
 
   const branchId = request.nextUrl.searchParams.get("branchId");
   const date = request.nextUrl.searchParams.get("date");
+  const from = request.nextUrl.searchParams.get("from");
+  const to = request.nextUrl.searchParams.get("to");
 
   if (!branchId) {
     return NextResponse.json({ error: "branchId is required" }, { status: 400 });
@@ -68,7 +70,16 @@ export async function GET(request: NextRequest) {
   }
 
   const filter: Record<string, unknown> = { branchId };
-  if (date) {
+  if (from || to) {
+    if (!from || !to) return NextResponse.json({ error: "Both from and to dates are required" }, { status: 400 });
+    const start = new Date(`${from}T00:00:00.000Z`);
+    const end = new Date(`${to}T00:00:00.000Z`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start.toISOString().slice(0, 10) !== from || end.toISOString().slice(0, 10) !== to || start > end) {
+      return NextResponse.json({ error: "Invalid date range. Use YYYY-MM-DD" }, { status: 400 });
+    }
+    end.setUTCDate(end.getUTCDate() + 1);
+    filter.businessDate = { $gte: start, $lt: end };
+  } else if (date) {
     const start = new Date(`${date}T00:00:00.000Z`);
     const end = new Date(`${date}T23:59:59.999Z`);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {

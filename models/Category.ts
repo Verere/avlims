@@ -6,6 +6,7 @@ export interface ICategory extends Document {
   labId: Types.ObjectId;
   branchId: Types.ObjectId;
   isCancelled: boolean;
+  worklistBackfillCompletedAt?: Date;
 }
 
 const CategorySchema = new Schema<ICategory>({
@@ -14,6 +15,12 @@ const CategorySchema = new Schema<ICategory>({
   labId: { type: Schema.Types.ObjectId, ref: 'Lab', required: true },
   branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
   isCancelled: { type: Boolean, default: false },
+  worklistBackfillCompletedAt: { type: Date },
 }, { timestamps: true });
 
-export default mongoose.models.Category || mongoose.model<ICategory>('Category', CategorySchema);
+const existingCategoryModel = mongoose.models.Category as mongoose.Model<ICategory> | undefined;
+if (existingCategoryModel && !existingCategoryModel.schema.path('worklistBackfillCompletedAt')) {
+  existingCategoryModel.schema.add({ worklistBackfillCompletedAt: { type: Date } });
+}
+
+export default existingCategoryModel || mongoose.model<ICategory>('Category', CategorySchema);

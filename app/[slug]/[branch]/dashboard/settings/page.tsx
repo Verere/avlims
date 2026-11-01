@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [labTransactionConfig, setLabTransactionConfig] = useState<TransactionIdConfig>(DEFAULT_TRANSACTION_ID_CONFIG);
   const [branchTransactionConfig, setBranchTransactionConfig] = useState<TransactionIdConfig>(DEFAULT_TRANSACTION_ID_CONFIG);
   const [branchOverrideEnabled, setBranchOverrideEnabled] = useState(false);
+  const [allowSpecimenConfiguration, setAllowSpecimenConfiguration] = useState(false);
+  const [savingSpecimenSetting, setSavingSpecimenSetting] = useState(false);
   const [savingTransactionScope, setSavingTransactionScope] = useState<"lab" | "branch" | null>(null);
   const [availableTests, setAvailableTests] = useState<Array<{ id: string; name: string; price: number; category?: string }>>([]);
   const [availablePanels, setAvailablePanels] = useState<Array<{ _id?: string; id?: string; name: string; code?: string; price?: number; category?: string }>>([]);
@@ -48,7 +50,8 @@ export default function SettingsPage() {
         if (!res.ok) throw new Error("Failed to load branch settings");
         const branch = await res.json();
         const transactionSettingsRes = await fetch(
-          `/api/transaction-id-settings?labSlug=${encodeURIComponent(labSlug)}&branchSlug=${encodeURIComponent(branchSlug)}`
+          `/api/transaction-id-settings?labSlug=${encodeURIComponent(labSlug)}&branchSlug=${encodeURIComponent(branchSlug)}`,
+          { cache: "no-store" }
         );
         if (!transactionSettingsRes.ok) {
           const data = await transactionSettingsRes.json().catch(() => ({}));
@@ -58,6 +61,7 @@ export default function SettingsPage() {
         setLabTransactionConfig(transactionSettings.labConfig || DEFAULT_TRANSACTION_ID_CONFIG);
         setBranchTransactionConfig(transactionSettings.branchConfig || transactionSettings.labConfig || DEFAULT_TRANSACTION_ID_CONFIG);
         setBranchOverrideEnabled(transactionSettings.usesBranchOverride === true);
+        setAllowSpecimenConfiguration(transactionSettings.allowSpecimenConfiguration === true);
         setPolicy({
           defaultPercentage: Number(branch?.referralBonusPolicy?.defaultPercentage ?? 0),
           exceptions: Array.isArray(branch?.referralBonusPolicy?.exceptions) && branch.referralBonusPolicy.exceptions.length
@@ -292,6 +296,30 @@ export default function SettingsPage() {
     }
   };
 
+  const saveSpecimenConfigurationSetting = async () => {
+    setSavingSpecimenSetting(true);
+    setMessage(null);
+    try {
+      const res = await fetch(
+        `/api/transaction-id-settings?labSlug=${encodeURIComponent(labSlug)}&branchSlug=${encodeURIComponent(branchSlug)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope: "specimenConfiguration", enabled: allowSpecimenConfiguration }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to save specimen configuration setting");
+      const savedSetting = data?.allowSpecimenConfiguration === true;
+      setAllowSpecimenConfiguration(savedSetting);
+      setMessage(`Specimen configuration ${savedSetting ? "enabled" : "disabled"} for this branch.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save specimen configuration setting");
+    } finally {
+      setSavingSpecimenSetting(false);
+    }
+  };
+
   const clearBranchTransactionOverride = async () => {
     setSavingTransactionScope("branch");
     setMessage(null);
@@ -423,6 +451,19 @@ export default function SettingsPage() {
           <div className="py-8 text-center text-slate-500">Loading settings...</div>
         ) : (
           <div className="space-y-8">
+            <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+              <h2 className="text-lg font-semibold text-slate-900">Specimen configuration</h2>
+              <p className="mb-4 mt-1 text-sm text-slate-600">Allow admins to enter specimen collection requirements when creating or editing catalogue tests. This is off by default.</p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <label className="flex items-center gap-3 text-sm font-medium text-slate-800">
+                  <input type="checkbox" checked={allowSpecimenConfiguration} onChange={(event) => setAllowSpecimenConfiguration(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                  Allow specimen configuration
+                </label>
+                <button type="button" onClick={saveSpecimenConfigurationSetting} disabled={savingSpecimenSetting || loading} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300">
+                  {savingSpecimenSetting ? "Saving..." : "Save specimen setting"}
+                </button>
+              </div>
+            </div>
             <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
               <h2 className="text-lg font-semibold text-slate-900">Test order transaction IDs</h2>
               <p className="mb-4 mt-1 text-sm text-slate-600">

@@ -8,6 +8,8 @@ export interface IBill extends Document {
   patient: string;
   referrer: string;
   amount: number;
+  /** Credit created at checkout, retained even as later receipts change balance. */
+  issuedCredit?: number;
   paid: number;
   balance: number;
   orderId: Types.ObjectId;
@@ -26,6 +28,7 @@ const BillSchema = new Schema<IBill>({
   patient: { type: String, required: true },
   referrer: { type: String, default: '' },
   amount: { type: Number, required: true },
+  issuedCredit: { type: Number, min: 0 },
   paid: { type: Number, required: true },
   balance: { type: Number, required: true },
   orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true },

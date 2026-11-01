@@ -10,6 +10,9 @@ export interface IBranch extends Document {
   email?: string;
   website?: string;
   transactionIdConfig?: TransactionIdConfig | null;
+  allowSpecimenConfiguration?: boolean;
+  specimenAcceptanceCriteria?: string[];
+  specimenRejectionReasons?: string[];
   referralBonusPolicy?: {
     defaultPercentage: number;
     exceptions: Array<{
@@ -31,6 +34,9 @@ const BranchSchema = new Schema<IBranch>({
   whatsapp: { type: String },
   email: { type: String },
   website: { type: String },
+  allowSpecimenConfiguration: { type: Boolean, default: false },
+  specimenAcceptanceCriteria: { type: [String], default: ["Identity matches order", "Correct specimen type", "Correct container", "Sufficient quantity", "Collection and transport timing acceptable", "Specimen condition acceptable"] },
+  specimenRejectionReasons: { type: [String], default: ["Incorrect identification", "Wrong container", "Insufficient quantity", "Leakage", "Unsuitable condition", "Compromised transport", "Other"] },
   transactionIdConfig: {
     type: {
       pattern: { type: String, required: true },
@@ -61,6 +67,9 @@ const BranchSchema = new Schema<IBranch>({
 });
 
 const existingBranchModel = mongoose.models.Branch as mongoose.Model<IBranch> | undefined;
+if (existingBranchModel && !existingBranchModel.schema.path('allowSpecimenConfiguration')) {
+  existingBranchModel.schema.add({ allowSpecimenConfiguration: { type: Boolean, default: false } });
+}
 if (existingBranchModel && !existingBranchModel.schema.path('transactionIdConfig')) {
   existingBranchModel.schema.add({
     transactionIdConfig: {
@@ -72,6 +81,12 @@ if (existingBranchModel && !existingBranchModel.schema.path('transactionIdConfig
       default: undefined,
     },
   });
+}
+if (existingBranchModel && !existingBranchModel.schema.path('specimenAcceptanceCriteria')) {
+  existingBranchModel.schema.add({ specimenAcceptanceCriteria: { type: [String], default: ["Identity matches order", "Correct specimen type", "Correct container", "Sufficient quantity", "Collection and transport timing acceptable", "Specimen condition acceptable"] } });
+}
+if (existingBranchModel && !existingBranchModel.schema.path('specimenRejectionReasons')) {
+  existingBranchModel.schema.add({ specimenRejectionReasons: { type: [String], default: ["Incorrect identification", "Wrong container", "Insufficient quantity", "Leakage", "Unsuitable condition", "Compromised transport", "Other"] } });
 }
 
 export default mongoose.models.Branch || mongoose.model<IBranch>('Branch', BranchSchema);

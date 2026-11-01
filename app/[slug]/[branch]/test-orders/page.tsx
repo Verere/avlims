@@ -12,6 +12,7 @@ interface TestOrder {
   gender?: string;
   name: string;
   amount: number;
+  amountDue?: number;
   amountPaid?: number;
   bal?: number;
   status: string;
@@ -137,7 +138,7 @@ export default function TestOrdersPage() {
     () =>
       filteredOrders.reduce(
         (acc, order) => {
-          acc.amount += Number(order.amount || 0);
+          acc.amount += Number(order.amountDue ?? Math.max(Number(order.amount || 0) - Number(order.discount || 0), 0));
           acc.discount += Number(order.discount || 0);
           return acc;
         },
@@ -214,7 +215,7 @@ export default function TestOrdersPage() {
         })
         .join("");
       const orderDate = order.bDate || order.createdAt;
-      const total = Number(order.amount || 0);
+      const total = Number(order.amountDue ?? Math.max(Number(order.amount || 0) - Number(order.discount || 0), 0));
       const paid = Number(order.amountPaid || 0);
       const balance = Number(order.bal ?? total - paid);
 
@@ -296,7 +297,7 @@ export default function TestOrdersPage() {
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Total Amount</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Amount Due</p>
                 <p className="mt-1 text-lg font-bold text-blue-900">{formatCurrency(totals.amount)}</p>
               </div>
               <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
@@ -358,7 +359,7 @@ export default function TestOrdersPage() {
                           <td className="whitespace-nowrap px-4 py-3 text-slate-700">{order.referral || "-"}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-slate-700">{order.user || "-"}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-slate-900">
-                            {formatCurrency(Number(order.amount || 0))}
+                            {formatCurrency(Number(order.amountDue ?? Math.max(Number(order.amount || 0) - Number(order.discount || 0), 0)))}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-amber-700">
                             {formatCurrency(Number(order.discount || 0))}

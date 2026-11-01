@@ -57,7 +57,8 @@ export async function GET(req: NextRequest) {
       branchConfig,
       usesBranchOverride: Boolean(branchConfig),
       effectiveConfig: branchConfig || labConfig,
-    });
+      allowSpecimenConfiguration: context.branch.allowSpecimenConfiguration === true,
+    }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
   } catch (error) {
     console.error('Failed to load transaction ID settings:', error);
     return NextResponse.json({ error: (error as Error).message || 'Failed to load transaction ID settings' }, { status: 500 });
@@ -72,6 +73,33 @@ export async function PATCH(req: NextRequest) {
 
     const body = await req.json();
     const scope = body?.scope;
+    if (scope === 'specimenConfiguration') {
+      if (typeof body?.enabled !== 'boolean') {
+        return NextResponse.json({ error: 'enabled must be true or false' }, { status: 400 });
+      }
+      const previous = context.branch.allowSpecimenConfiguration === true;
+      const updatedBranch = await Branch.findByIdAndUpdate(
+        context.branch._id,
+        { $set: { allowSpecimenConfiguration: body.enabled } },
+        { new: true, runValidators: true }
+      ).select('allowSpecimenConfiguration');
+      if (!updatedBranch) return NextResponse.json({ error: 'Branch not found' }, { status: 404 });
+      if (previous !== body.enabled) {
+        await writeAuditLog(req, {
+          action: 'update',
+          entityType: 'Settings',
+          entityId: context.branch._id,
+          labId: context.lab._id,
+          branchId: context.branch._id,
+          changes: { fields: { allowSpecimenConfiguration: { from: previous, to: body.enabled } } },
+          metadata: { setting: 'Specimen configuration', scope: 'branch', summary: `Specimen configuration ${body.enabled ? 'enabled' : 'disabled'} for this branch` },
+        });
+      }
+      return NextResponse.json(
+        { success: true, allowSpecimenConfiguration: updatedBranch.allowSpecimenConfiguration === true },
+        { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+      );
+    }
     if (scope === 'clearBranch') {
       const previousConfig = validateTransactionIdConfig(context.branch.transactionIdConfig);
       context.branch.transactionIdConfig = undefined;

@@ -3,6 +3,9 @@ import mongoose, { Schema, Document } from 'mongoose';
 export type TestType = 'lab' | 'scan';
 export type ResultType = 'numeric' | 'qualitative' | 'enumerated' | 'text';
 export type SampleType = 'blood' | 'urine' | 'stool' | 'serum' | 'swab' | 'csf' | 'sputum' | 'other';
+export type SpecimenType = 'blood' | 'serum' | 'plasma' | 'urine' | 'stool' | 'sputum' | 'swab' | 'tissue' | 'semen' | 'other';
+export type CollectionPriority = 'routine' | 'urgent' | 'stat' | 'other';
+export type CollectionConfigStatus = 'needs_review' | 'configured';
 export type AgeGroup = 'pediatric' | 'adult' | 'all';
 
 export interface IReferenceRange {
@@ -31,6 +34,15 @@ export interface ITest extends Document {
   type: TestType;
   resultType: ResultType;
   sampleType?: SampleType;
+
+  // Specimen collection configuration. Legacy tests stay marked for review.
+  requires_specimen_collection: boolean;
+  specimen_type?: SpecimenType;
+  container_type?: string;
+  collection_method?: string;
+  collection_instructions?: string;
+  collection_priority?: CollectionPriority;
+  collection_config_status: CollectionConfigStatus;
 
   // Logistics
   unit?: string;
@@ -85,6 +97,13 @@ const TestSchema = new Schema<ITest>(
       type: String,
       enum: ['blood', 'urine', 'stool', 'serum', 'swab', 'csf', 'sputum', 'other'],
     },
+    requires_specimen_collection: { type: Boolean, default: false },
+    specimen_type: { type: String, trim: true },
+    container_type: { type: String, trim: true },
+    collection_method: { type: String, trim: true },
+    collection_instructions: { type: String, trim: true },
+    collection_priority: { type: String, enum: ['routine', 'urgent', 'stat', 'other'], default: 'routine' },
+    collection_config_status: { type: String, enum: ['needs_review', 'configured'], default: 'needs_review', index: true },
 
     unit: { type: String },
     turnaroundHours: { type: Number },
