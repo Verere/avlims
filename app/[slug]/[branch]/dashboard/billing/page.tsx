@@ -208,6 +208,32 @@ export default function DashboardBillingPage() {
   const selectedBillToRecipients = Array.from(new Set(selectedBills.map((bill) => bill.billToName || bill.billTo).filter(Boolean)));
   const selectedBillsTotal = selectedBills.reduce((total, bill) => total + Number(bill.amount || 0), 0);
   const canGenerateBillLetter = selectedBills.length > 0 && selectedBillToRecipients.length === 1;
+  const printBillLetter = () => {
+    const letter = document.querySelector<HTMLElement>("#bill-letter-print article");
+    if (!letter) return;
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) return;
+
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html><html><head><title>Bill Letter</title><meta charset="utf-8" />
+      <style>
+        @page { size: auto; margin: 14mm; }
+        body { color: #1e293b; font: 12px/1.6 Arial, sans-serif; }
+        article { text-transform: uppercase; }
+        p { margin: 0 0 14px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11px; }
+        thead { display: table-header-group; }
+        tr { break-inside: avoid; }
+        th, td { border: 1px solid #64748b; padding: 4px 6px; }
+        th { background: #f1f5f9; }
+      </style></head><body>${letter.outerHTML}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 300);
+  };
   const periodLabel = fromDate === toDate
     ? formatDate(fromDate)
     : `${formatDate(fromDate)} to ${formatDate(toDate)}`;
@@ -586,9 +612,9 @@ export default function DashboardBillingPage() {
         )}
 
         {showBillLetter && canGenerateBillLetter ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setShowBillLetter(false)}>
-            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
-              <div className="mb-5 flex items-center justify-between gap-4">
+          <div id="bill-letter-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setShowBillLetter(false)}>
+            <div id="bill-letter-print" className="max-h-[90vh] w-full max-w-3xl overflow-y-auto bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
+              <div className="no-print mb-5 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected Bills</p>
                   <h2 className="text-xl font-bold text-slate-900">Bill Letter</h2>
@@ -602,6 +628,11 @@ export default function DashboardBillingPage() {
                 <p className="font-bold">Bill for medical investigations done for your clients from {periodLabel}</p>
                 <p>Please find the medical investigation bill of your clients done in <strong>Resonance Medical Diagnostics Ltd, Ughelli</strong> from {periodLabel}.</p>
                 <p className="font-bold">Medical investigations done for your clients in the month of {selectedMonthLabel}</p>
+                <p>The total cost of the investigations is <strong>{numberToWords(selectedBillsTotal)} Naira only ({formatCurrency(selectedBillsTotal)})</strong>.</p>
+                <p>We will be grateful if the money is paid to us in cash or into our account.</p>
+                <p><strong>Account details: Union Bank, Resonance Diagnostics Ltd; 0217252732</strong></p>
+                <p>Kind regards.</p>
+                <div><p>Abugu, Jude Ogechukwu</p><p>For Management</p><p>08069999425</p></div>
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-left text-xs leading-5">
                     <thead>
@@ -630,14 +661,9 @@ export default function DashboardBillingPage() {
                     </tbody>
                   </table>
                 </div>
-                <p>The total cost of the investigations is <strong>{numberToWords(selectedBillsTotal)} Naira only ({formatCurrency(selectedBillsTotal)})</strong>.</p>
-                <p>We will be grateful if the money is paid to us in cash or into our account.</p>
-                <p><strong>Account details: Union Bank, Resonance Diagnostics Ltd; 0217252732</strong></p>
-                <p>Kind regards.</p>
-                <div><p>Abugu, Jude Ogechukwu</p><p>For Management</p><p>08069999425</p></div>
               </article>
-              <div className="mt-5 flex justify-end">
-                <button type="button" onClick={() => window.print()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Print Letter</button>
+              <div className="no-print mt-5 flex justify-end">
+                <button type="button" onClick={printBillLetter} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Print Letter</button>
               </div>
             </div>
           </div>
